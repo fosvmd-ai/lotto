@@ -1,7 +1,13 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, Play, RotateCcw, Sparkles, Volume2, Flag } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Sparkles, Volume2, Flag, Bomb, Flame } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 import soundEngine from '../soundEngine';
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 interface Student {
   id: string;
@@ -20,6 +26,29 @@ interface Marble {
   finished: boolean;
   finishRank: number;
   trail: { x: number; y: number }[];
+  isBomb?: boolean;
+  bombTimer?: number;
+  boostEffect?: number;
+}
+
+interface Shockwave {
+  x: number;
+  y: number;
+  radius: number;
+  maxRadius: number;
+  color: string;
+  alpha: number;
+}
+
+interface ExplosionParticle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  color: string;
+  alpha: number;
+  life: number;
 }
 
 interface Peg {
@@ -81,12 +110,18 @@ export default function MarbleRace({
   const [countdown, setCountdown] = useState<number>(3);
   const [winners, setWinners] = useState<{ rank: number; name: string; color: string }[]>([]);
   const [leaderboard, setLeaderboard] = useState<{ name: string; y: number; rank: number }[]>([]);
+  const [bombMode, setBombMode] = useState<boolean>(true);
+  const [bombAlert, setBombAlert] = useState<string | null>(null);
   
   const marblesRef = useRef<Marble[]>([]);
   const pegsRef = useRef<Peg[]>([]);
   const bumpersRef = useRef<Bumper[]>([]);
   const rampsRef = useRef<Ramp[]>([]);
   const spinnersRef = useRef<Spinner[]>([]);
+  const shockwavesRef = useRef<Shockwave[]>([]);
+  const particlesRef = useRef<ExplosionParticle[]>([]);
+  const nextBombTimeRef = useRef<number>(0);
+  const screenShakeRef = useRef<number>(0);
   const animFrameRef = useRef<number | null>(null);
   const lastSoundTimeRef = useRef<number>(0);
   const winnersListRef = useRef<string[]>([]);
@@ -222,6 +257,12 @@ export default function MarbleRace({
         if (prev <= 1) {
           clearInterval(timer);
           setRaceState('racing');
+          // Reset bomb schedule
+          nextBombTimeRef.current = Date.now() + 2500;
+          shockwavesRef.current = [];
+          particlesRef.current = [];
+          screenShakeRef.current = 0;
+          setBombAlert(null);
           // Gate open sound
           soundEngine.playWin('marble');
           return 0;
@@ -237,6 +278,10 @@ export default function MarbleRace({
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     initTrack();
     initMarbles();
+    shockwavesRef.current = [];
+    particlesRef.current = [];
+    screenShakeRef.current = 0;
+    setBombAlert(null);
     setRaceState('ready');
     setWinners([]);
     winnersListRef.current = [];
@@ -273,6 +318,46 @@ export default function MarbleRace({
       const ramps = rampsRef.current;
       const spinners = spinnersRef.current;
 
+      // 2-1. Random Marble Explosion Trigger
+      if (bombMode && raceState === 'racing') {
+        const now = Date.now();
+        if (now > nextBombTimeRef.current) {
+          const activeMarbles = marbles.filter(m => !m.finished && !m.isBomb);
+          if (activeMarbles.length > 0) {
+            const target = activeMarbles[Math.floor(Math.random() * activeMarbles.length)];
+            target.isBomb = true;
+            target.bombTimer = 45; // ~0.75 seconds warning countdown
+            soundEngine.playBombWarning();
+          }
+          // Next bomb scheduled in 2.5 ~ 4.5 seconds
+          nextBombTimeRef.current = now + (2500 + Math.random() * 2000);
+        }
+      }
+
+      // 2-2. Update Shockwaves
+      for (let s = shockwavesRef.current.length - 1; s >= 0; s--) {
+        const sw = shockwavesRef.current[s];
+        sw.radius += 7;
+        sw.alpha *= 0.92;
+        if (sw.radius >= sw.maxRadius || sw.alpha < 0.02) {
+          shockwavesRef.current.splice(s, 1);
+        }
+      }
+
+      // 2-3. Update Explosion Particles
+      for (let p = particlesRef.current.length - 1; p >= 0; p--) {
+        const pt = particlesRef.current[p];
+        pt.x += pt.vx;
+        pt.y += pt.vy;
+        pt.vx *= 0.95;
+        pt.vy *= 0.95;
+        pt.life--;
+        pt.alpha = pt.life / 40;
+        if (pt.life <= 0) {
+          particlesRef.current.splice(p, 1);
+        }
+      }
+
       // 3. Update Marbles Physics
       for (let i = 0; i < marbles.length; i++) {
         const m = marbles[i];
@@ -283,6 +368,76 @@ export default function MarbleRace({
           m.y += m.vy;
           m.x += m.vx;
           continue;
+        }
+
+        // Bomb countdown & detonation
+        if (m.isBomb && m.bombTimer !== undefined) {
+          m.bombTimer--;
+          if (m.bombTimer > 0 && m.bombTimer % 12 === 0) {
+            soundEngine.playBombWarning();
+          } else if (m.bombTimer <= 0) {
+            // DETONATE!
+            m.isBomb = false;
+            soundEngine.playExplosionBlast();
+            screenShakeRef.current = 14;
+
+            // Spawn Shockwave ring
+            shockwavesRef.current.push({
+              x: m.x,
+              y: m.y,
+              radius: m.radius,
+              maxRadius: 220,
+              color: '#f97316',
+              alpha: 1
+            });
+
+            // Spawn Fire/Spark particles
+            for (let k = 0; k < 28; k++) {
+              const angle = Math.random() * Math.PI * 2;
+              const spd = 2 + Math.random() * 8;
+              particlesRef.current.push({
+                x: m.x,
+                y: m.y,
+                vx: Math.cos(angle) * spd,
+                vy: Math.sin(angle) * spd,
+                size: 3 + Math.random() * 5,
+                color: Math.random() > 0.4 ? '#f97316' : (Math.random() > 0.5 ? '#eab308' : '#ffffff'),
+                alpha: 1,
+                life: 30 + Math.floor(Math.random() * 20)
+              });
+            }
+
+            // Blast nearby marbles outward with high impulse!
+            const blastRadius = 220;
+            for (let j = 0; j < marbles.length; j++) {
+              const other = marbles[j];
+              if (other.finished || other === m) continue;
+              const dx = other.x - m.x;
+              const dy = other.y - m.y;
+              const dist = Math.hypot(dx, dy);
+              if (dist < blastRadius && dist > 0.001) {
+                const force = (1 - dist / blastRadius) * 24;
+                const nx = dx / dist;
+                const ny = dy / dist;
+                other.vx += nx * force + (Math.random() - 0.5) * 6;
+                other.vy += ny * force - 6; // blast upward and outward
+                playBounceSound();
+              }
+            }
+
+            // Exploded marble gains massive forward turbo rocket boost!
+            m.vy += 10;
+            m.vx += (Math.random() - 0.5) * 8;
+            m.boostEffect = 60;
+
+            setBombAlert(`💥 ${m.name} 구슬 대폭발!!`);
+            setTimeout(() => setBombAlert(null), 1800);
+          }
+        }
+
+        // Decay boost effect
+        if (m.boostEffect && m.boostEffect > 0) {
+          m.boostEffect--;
         }
 
         m.vy += gravity;
@@ -503,7 +658,17 @@ export default function MarbleRace({
       // 7. RENDER TRACK ON CANVAS
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
-      ctx.translate(0, -cameraY);
+
+      // Screen Shake translation
+      let shakeX = 0;
+      let shakeY = 0;
+      if (screenShakeRef.current > 0) {
+        shakeX = (Math.random() - 0.5) * screenShakeRef.current;
+        shakeY = (Math.random() - 0.5) * screenShakeRef.current;
+        screenShakeRef.current *= 0.86;
+        if (screenShakeRef.current < 0.2) screenShakeRef.current = 0;
+      }
+      ctx.translate(shakeX, -cameraY + shakeY);
 
       // Track Background & Side Rails
       ctx.fillStyle = '#0f172a';
@@ -613,8 +778,47 @@ export default function MarbleRace({
       ctx.fillText('🏁 FINISH LINE 🏁', TRACK_WIDTH / 2, FINISH_Y - 12);
       ctx.restore();
 
+      // Draw Shockwaves
+      shockwavesRef.current.forEach(sw => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(249, 115, 22, ${Math.max(0, sw.alpha)})`;
+        ctx.lineWidth = 8;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, Math.max(1, sw.radius * 0.85), 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(254, 240, 138, ${Math.max(0, sw.alpha * 0.8)})`;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.restore();
+      });
+
+      // Draw Explosion Fire Particles
+      particlesRef.current.forEach(pt => {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(pt.x, pt.y, pt.size, 0, Math.PI * 2);
+        ctx.fillStyle = pt.color;
+        ctx.globalAlpha = Math.max(0, Math.min(1, pt.alpha));
+        ctx.fill();
+        ctx.restore();
+      });
+
       // Draw Marbles
       marbles.forEach(m => {
+        // Rocket Turbo Boost Flame Effect
+        if (m.boostEffect && m.boostEffect > 0) {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(m.x, m.y + m.radius + 6, (m.boostEffect / 60) * 16, 0, Math.PI * 2);
+          ctx.fillStyle = Math.random() > 0.5 ? '#f97316' : '#facc15';
+          ctx.filter = 'blur(4px)';
+          ctx.fill();
+          ctx.restore();
+        }
+
         // Motion Trail
         if (m.trail.length > 1) {
           ctx.beginPath();
@@ -625,6 +829,22 @@ export default function MarbleRace({
           ctx.strokeStyle = `${m.color}55`;
           ctx.lineWidth = m.radius * 1.2;
           ctx.stroke();
+        }
+
+        // Bomb Charging Aura (flashing red/yellow warning aura)
+        if (m.isBomb) {
+          ctx.save();
+          const flash = Math.sin(Date.now() * 0.03) > 0;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, m.radius + 8, 0, Math.PI * 2);
+          ctx.strokeStyle = flash ? '#ef4444' : '#fbbf24';
+          ctx.lineWidth = 4;
+          ctx.stroke();
+
+          // Shockwave pulsing background
+          ctx.fillStyle = flash ? 'rgba(239, 68, 68, 0.35)' : 'rgba(251, 191, 36, 0.2)';
+          ctx.fill();
+          ctx.restore();
         }
 
         // Marble Sphere (Radial gradient 3D glass look)
@@ -644,14 +864,21 @@ export default function MarbleRace({
         ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
         ctx.fillStyle = grad;
         ctx.fill();
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = m.isBomb ? '#ef4444' : '#ffffff';
+        ctx.lineWidth = m.isBomb ? 2.5 : 1.5;
         ctx.stroke();
+
+        // Bomb indicator emoji above name
+        if (m.isBomb) {
+          ctx.font = '16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('💣', m.x, m.y - m.radius - 22);
+        }
 
         // Student Name Tag above Marble
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        ctx.fillStyle = m.isBomb ? 'rgba(220, 38, 38, 0.95)' : 'rgba(15, 23, 42, 0.85)';
         const textWidth = ctx.measureText(m.name).width;
         ctx.fillRect(m.x - textWidth / 2 - 4, m.y - m.radius - 18, textWidth + 8, 14);
 
@@ -680,7 +907,7 @@ export default function MarbleRace({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [raceState, numWinners, primaryColor]);
+  }, [raceState, numWinners, primaryColor, bombMode]);
 
   return (
     <div className="w-full max-w-4xl flex flex-col items-center select-none relative">
@@ -703,6 +930,21 @@ export default function MarbleRace({
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Bomb Mode Toggle Button */}
+          <button
+            onClick={() => setBombMode(prev => !prev)}
+            className={cn(
+              "px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border shadow-sm",
+              bombMode 
+                ? "bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30" 
+                : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200"
+            )}
+            title="레이스 도중 구슬들이 무작위로 폭발하며 충격파를 뿜어내는 모드입니다."
+          >
+            <Bomb className={cn("w-3.5 h-3.5", bombMode ? "text-rose-400 animate-pulse" : "text-slate-400")} />
+            <span>폭발 모드 {bombMode ? "ON" : "OFF"}</span>
+          </button>
+
           {raceState === 'ready' && (
             <button
               onClick={startCountdown}
@@ -728,6 +970,14 @@ export default function MarbleRace({
 
       {/* Main Track View Container */}
       <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[560px] bg-slate-950 rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl flex justify-center">
+        {/* Bomb Alert Floating Notification */}
+        {bombAlert && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-rose-600/90 backdrop-blur-md text-white px-5 py-2 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-2 z-50 animate-bounce border border-rose-400">
+            <Flame className="w-4 h-4 text-amber-300 fill-current" />
+            <span>{bombAlert}</span>
+          </div>
+        )}
+
         {/* HTML5 Canvas */}
         <canvas
           ref={canvasRef}

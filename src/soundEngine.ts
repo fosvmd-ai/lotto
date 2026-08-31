@@ -183,6 +183,20 @@ class SoundEngine {
     this.playTone(pitch, 'sine', 0.025, 0, Math.min(0.3, volume), pitch * 0.6);
   }
 
+  // Marble explosion warning beep
+  public playBombWarning() {
+    this.playTone(880, 'square', 0.05, 0, 0.18);
+  }
+
+  // Marble explosion blast sound
+  public playExplosionBlast() {
+    // 1. Noise shockwave
+    this.playNoise(0.6, 'lowpass', 600, 0, 0.7);
+    // 2. Sub-bass boom
+    this.playTone(130, 'sine', 0.5, 0, 0.8, 30);
+    this.playTone(90, 'triangle', 0.4, 0, 0.5, 20);
+  }
+
   public stopTick(effect: string) {
     // Clean up if any continuous sound is active
     if (this.continuousOsc) {
