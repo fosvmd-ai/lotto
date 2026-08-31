@@ -278,6 +278,18 @@ export default function App() {
 
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [loginModalContent, setLoginModalContent] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+  const handleAdminSignIn = async () => {
+    try {
+      setIsLoggingIn(true);
+      await signIn();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
 
   const handleLogin = () => {
     const name = loginInput.trim();
