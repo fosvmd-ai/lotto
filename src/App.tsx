@@ -329,12 +329,16 @@ export default function App() {
           <p className="text-slate-600">{loginModalContent}</p>
         </Modal>
         <div className="bg-slate-900 p-8 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full text-center">
-          <button 
-            onClick={signIn}
-            className="text-xs text-slate-600 hover:text-slate-400 mb-8"
-          >
-            선생님/관리자 로그인
-          </button>
+          <div className="flex justify-end mb-6">
+            <button 
+              onClick={handleAdminSignIn}
+              disabled={isLoggingIn}
+              className="text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-3.5 py-2 rounded-xl transition-all border border-slate-700 flex items-center gap-1.5 shadow-sm"
+            >
+              {isLoggingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />}
+              <span>{isLoggingIn ? "구글 로그인 중..." : "선생님/관리자 로그인"}</span>
+            </button>
+          </div>
           <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-6" />
           <h1 className="text-3xl font-black mb-2">우리반 로또</h1>
           <p className="text-slate-400 mb-8">이름을 입력하고 입장하세요!</p>
