@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (exists(/databases/$(database)/documents/admins/$(request.auth.token.email)) ||
+         (request.auth.token.email == "fosvmd@gmail.com" && request.auth.token.email_verified == true) ||
+         (request.auth.token.email == "fosvm2@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    match /admins/{email} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    function hasOnlyAllowedFields(data, allowedFields) {
+      return data.keys().hasOnly(allowedFields);
+    }
+
+    function isValidEntry(data) {
+      let allowed = ['uid', 'studentName', 'picks', 'timestamp', 'adminEmail'];
+      return hasOnlyAllowedFields(data, allowed) &&
+             data.picks is list &&
+             data.picks.size() == 5 &&
+             data.studentName is string &&
+             data.studentName.size() > 0 &&
+             data.studentName.size() < 50 &&
+             data.uid is string &&
+             (data.adminEmail is string || !('adminEmail' in data));
+    }
+
+    match /students/{studentId} {
+      // Students need to read the list to login and pick names
+      allow read: if true; 
+      allow write: if isAdmin();
+    }
+
+    match /entries/{entryId} {
+      allow read: if true;
+      allow create: if isValidEntry(request.resource.data);
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    match /gameState/{stateId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "entities": {
+    "Student": {
+      "title": "Student",
+      "description": "A student in the class list",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The name of the student" },
+        "tickets": { "type": "number", "description": "Number of lotto tickets purchased", "default": 1 },
+        "adminEmail": { "type": "string", "description": "Email of the admin who owns this student" }
+      },
+      "required": ["name", "adminEmail"]
+    },
+    "Entry": {
+      "title": "Lotto Entry",
+      "description": "A student's lotto picks",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "User ID of the student" },
+        "studentName": { "type": "string", "description": "Name of the student who entered" },
+        "picks": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Array of 5 student names picked"
+        },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "adminEmail": { "type": "string", "description": "Email of the admin who owns this entry" }
+      },
+      "required": ["uid", "studentName", "picks", "timestamp", "adminEmail"]
+    },
+    "GameState": {
+      "title": "Game State",
+      "description": "Global state of the lotto game",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["waiting", "drawing", "finished"] },
+        "winningNumbers": { "type": "array", "items": { "type": "string" } },
+        "round": { "type": "number" }
+      },
+      "required": ["status", "round"]
+    },
+    "Admin": {
+      "title": "Admin",
+      "description": "Authorized administrator",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Admin email address" }
+      },
+      "required": ["email"]
+    }
+  },
+  "firestore": {
+    "students": { "schema": "Student", "description": "List of students in the class" },
+    "entries": { "schema": "Entry", "description": "Student lotto entries" },
+    "gameState": { "schema": "GameState", "description": "Game state per admin (doc ID is admin email)" },
+    "admins": { "schema": "Admin", "description": "List of authorized admin emails" }
+  }
+}
