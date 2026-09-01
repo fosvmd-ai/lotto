@@ -702,13 +702,23 @@ export default function MarbleRace({
           if (dist < m.radius + 6) {
             const nx = (m.x - closestX) / (dist || 1);
             const ny = (m.y - closestY) / (dist || 1);
-            m.x = closestX + nx * (m.radius + 6);
-            m.y = closestY + ny * (m.radius + 6);
-            // Spinner tangential velocity push
-            const rotRadius = isEdge ? (u * sp.length) : (sp.length * 0.5);
-            const tangentSpeed = sp.speed * rotRadius;
-            m.vx = nx * 6 - sin * tangentSpeed * 1.2;
-            m.vy = ny * 6 + cos * tangentSpeed * 1.2;
+
+            if (isEdge) {
+              // Edge-anchored Gate Barrier: ALWAYS bounce the marble UPWARD away from alley!
+              m.y = Math.min(m.y, closestY - m.radius - 2);
+              m.x = closestX + nx * (m.radius + 6);
+              // Force strong upward bounce
+              m.vy = -Math.abs(m.vy) * 0.75 - 7;
+              m.vx += (Math.random() - 0.5) * 8 + nx * 5;
+            } else {
+              m.x = closestX + nx * (m.radius + 6);
+              m.y = closestY + ny * (m.radius + 6);
+              // Spinner tangential velocity push
+              const rotRadius = sp.length * 0.5;
+              const tangentSpeed = sp.speed * rotRadius;
+              m.vx = nx * 6 - sin * tangentSpeed * 1.2;
+              m.vy = ny * 6 + cos * tangentSpeed * 1.2;
+            }
             playBounceSound();
           }
         }
@@ -776,8 +786,43 @@ export default function MarbleRace({
           }
         }
 
-        // Check Finish Line
-        if (m.y >= FINISH_Y && !m.finished) {
+        // --- Hard Boundary Guard for Finish Funnel & Alley (Prevents wall clipping & tunneling) ---
+        if (m.y >= 3120) {
+          if (m.y >= 3230) {
+            // Inside the vertical alley zone (y >= 3230)
+            if (m.x >= 308 - m.radius && m.x <= 392 + m.radius) {
+              // Marble is inside alley: strictly confine between x = 308 and x = 392
+              if (m.x < 308 + m.radius) {
+                m.x = 308 + m.radius;
+                m.vx = Math.abs(m.vx) * 0.6;
+              } else if (m.x > 392 - m.radius) {
+                m.x = 392 - m.radius;
+                m.vx = -Math.abs(m.vx) * 0.6;
+              }
+            } else {
+              // Marble is OUTSIDE the alley: clamp strictly ABOVE the funnel slopes so it cannot drop down
+              if (m.x < 308) {
+                const slopeY = 3120 + ((m.x - 20) / (308 - 20)) * 110;
+                if (m.y > slopeY - m.radius) {
+                  m.y = slopeY - m.radius;
+                  m.vy = -Math.abs(m.vy) * 0.5 - 2;
+                  m.vx += 1.5;
+                }
+              } else if (m.x > 392) {
+                const slopeY = 3120 + ((680 - m.x) / (680 - 392)) * 110;
+                if (m.y > slopeY - m.radius) {
+                  m.y = slopeY - m.radius;
+                  m.vy = -Math.abs(m.vy) * 0.5 - 2;
+                  m.vx -= 1.5;
+                }
+              }
+            }
+          }
+        }
+
+        // Check Finish Line (STRICTLY VALID ONLY INSIDE THE NARROW ALLEY!)
+        const isInsideFinishAlley = m.x >= 308 - 4 && m.x <= 392 + 4;
+        if (m.y >= FINISH_Y && isInsideFinishAlley && !m.finished) {
           m.finished = true;
           const rank = winnersListRef.current.length + 1;
           m.finishRank = rank;
