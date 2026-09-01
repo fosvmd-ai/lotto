@@ -145,6 +145,7 @@ export default function MarbleRace({
   const [bombMode, setBombMode] = useState<boolean>(true);
   const [bombAlert, setBombAlert] = useState<string | null>(null);
   const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
+  const [finishCountdown, setFinishCountdown] = useState<number>(30);
   
   const marblesRef = useRef<Marble[]>([]);
   const pegsRef = useRef<Peg[]>([]);
@@ -246,14 +247,14 @@ export default function MarbleRace({
     ramps.push({ x1: 308, y1: 3230, x2: 308, y2: FINISH_Y + 40 });
     ramps.push({ x1: 392, y1: 3230, x2: 392, y2: FINISH_Y + 40 });
 
-    // 3. Rotating Gate Barrier Bar on Alley Entrance (골목 입구에서 360도 회전하는 긴 방해 막대)
-    // Left anchor at (308, 3225), length 86px (골목 폭을 가로막으며 회전)
+    // 3. Rotating Gate Barrier Bar on Alley Entrance (골목 입구에서 시계 반대방향 360도 회전하는 긴 방해 막대)
+    // Left anchor at (308, 3225), length 110px (골목 입구를 강력하게 차단)
     spinners.push({
       x: 308,
       y: 3225,
-      length: 86,
+      length: 110,
       angle: 0,
-      speed: 0.045,
+      speed: -0.048, // 시계 반대방향 회전!
       anchorType: 'edge',
       color: '#f59e0b'
     });
@@ -378,7 +379,29 @@ export default function MarbleRace({
     setRaceState('ready');
     setWinners([]);
     winnersListRef.current = [];
+    setFinishCountdown(30);
   };
+
+  // Manual / Auto Finish Handler
+  const handleConfirmFinish = () => {
+    onRaceFinished(winnersListRef.current.slice(0, numWinners));
+  };
+
+  // Countdown when race completes (allows generous 30s viewing time or immediate button click)
+  useEffect(() => {
+    if (raceState !== 'completed') return;
+    const timer = setInterval(() => {
+      setFinishCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleConfirmFinish();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [raceState, numWinners]);
 
   // Physics Simulation Loop
   useEffect(() => {
@@ -775,9 +798,14 @@ export default function MarbleRace({
           // If reached required winner count
           if (winnersListRef.current.length >= numWinners) {
             setRaceState('completed');
-            setTimeout(() => {
-              onRaceFinished(winnersListRef.current.slice(0, numWinners));
-            }, 3000);
+            setFinishCountdown(30);
+            soundEngine.playWin('marble');
+            confetti({
+              particleCount: 180,
+              spread: 95,
+              origin: { y: 0.5 },
+              colors: ['#fbbf24', '#f59e0b', '#10b981', '#6366f1', '#ec4899']
+            });
           }
         }
       }
@@ -1388,6 +1416,16 @@ export default function MarbleRace({
               다시 하기
             </button>
           )}
+
+          {raceState === 'completed' && (
+            <button
+              onClick={handleConfirmFinish}
+              className="px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-md animate-pulse"
+            >
+              <Sparkles className="w-3.5 h-3.5 fill-current" />
+              <span>결과 확정 ({finishCountdown}s)</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -1473,11 +1511,66 @@ export default function MarbleRace({
           </div>
         </div>
 
-        {/* Race Completed Banner */}
+        {/* Race Completed Big Winner Modal with Manual Finish Button */}
         {raceState === 'completed' && (
-          <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-amber-500 text-slate-950 px-8 py-3 rounded-2xl shadow-2xl font-black text-lg flex items-center gap-3 z-40 animate-bounce border-2 border-white">
-            <Trophy className="w-6 h-6" />
-            모든 당첨 구슬 골인 완료! 잠시 후 결과를 확정합니다.
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-6 z-50 animate-in fade-in zoom-in-95">
+            <div className="w-full max-w-md bg-slate-900 border-2 border-amber-400/80 rounded-3xl p-6 shadow-[0_0_60px_rgba(251,191,36,0.35)] flex flex-col items-center text-center">
+              <div className="w-14 h-14 rounded-2xl bg-amber-400/20 border border-amber-400/50 flex items-center justify-center mb-3 text-amber-400 shadow-inner">
+                <Trophy className="w-8 h-8" />
+              </div>
+              <h2 className="text-xl sm:text-2xl font-black text-white mb-1">
+                🎉 최종 당첨 구슬 골인 완료!
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-300 mb-4">
+                선발된 <span className="text-amber-400 font-black">{winners.length}명</span>의 당첨 학생 명단입니다.
+              </p>
+
+              {/* Winner List scrollable container */}
+              <div className="w-full max-h-[200px] overflow-y-auto space-y-2 mb-5 pr-1 text-left">
+                {winners.slice(0, numWinners).map((w, idx) => (
+                  <div 
+                    key={w.name} 
+                    className="flex items-center justify-between p-2.5 rounded-2xl bg-slate-800/90 border border-slate-700/80 shadow-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={cn(
+                        "w-7 h-7 rounded-full font-black text-xs flex items-center justify-center shadow",
+                        idx === 0 ? "bg-amber-400 text-slate-950 ring-2 ring-amber-300" :
+                        idx === 1 ? "bg-slate-300 text-slate-950" :
+                        idx === 2 ? "bg-amber-700 text-white" : "bg-indigo-600 text-white"
+                      )}>
+                        {w.rank}등
+                      </span>
+                      <span className="text-base font-black text-white">{w.name}</span>
+                    </div>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                      🏆 당첨 확정
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="w-full flex flex-col sm:flex-row items-center gap-2.5">
+                <button
+                  onClick={handleConfirmFinish}
+                  className="w-full sm:flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 font-black text-sm shadow-xl flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-[0.98] transition-all"
+                >
+                  <Sparkles className="w-4 h-4 fill-current" />
+                  <span>결과 확정 및 화면 닫기</span>
+                  <span className="text-[10px] font-bold text-slate-800 bg-black/10 px-1.5 py-0.5 rounded-md ml-1">
+                    {finishCountdown}s
+                  </span>
+                </button>
+                <button
+                  onClick={resetRace}
+                  className="w-full sm:w-auto py-2.5 px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs border border-slate-700 flex items-center justify-center gap-1.5"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>다시 하기</span>
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
