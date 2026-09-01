@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, Play, RotateCcw, Sparkles, Volume2, Flag, Bomb, Flame } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Sparkles, Volume2, Flag, Bomb, Flame, Hourglass, ShieldAlert } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import soundEngine from '../soundEngine';
@@ -143,6 +143,8 @@ export default function MarbleRace({
   const [winners, setWinners] = useState<{ rank: number; name: string; color: string }[]>([]);
   const [leaderboard, setLeaderboard] = useState<{ name: string; y: number; rank: number }[]>([]);
   const [bombMode, setBombMode] = useState<boolean>(true);
+  const [winRule, setWinRule] = useState<'first' | 'last'>('first');
+  const [eliminated, setEliminated] = useState<string[]>([]);
   const [bombAlert, setBombAlert] = useState<string | null>(null);
   const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
   const [finishCountdown, setFinishCountdown] = useState<number>(30);
@@ -356,6 +358,7 @@ export default function MarbleRace({
           zoomRef.current = 1.0;
           setBombAlert(null);
           setOvertakeAlert(null);
+          setEliminated([]);
           // Gate open sound
           soundEngine.playWin('marble');
           return 0;
@@ -380,6 +383,7 @@ export default function MarbleRace({
     zoomRef.current = 1.0;
     setBombAlert(null);
     setOvertakeAlert(null);
+    setEliminated([]);
     setRaceState('ready');
     setWinners([]);
     winnersListRef.current = [];
@@ -828,32 +832,67 @@ export default function MarbleRace({
         if (m.y >= FINISH_Y && isInsideFinishAlley && !m.finished) {
           m.finished = true;
 
-          // Only trigger winner celebration & confetti for actual winners within numWinners!
-          if (winnersListRef.current.length < numWinners) {
-            const rank = winnersListRef.current.length + 1;
-            m.finishRank = rank;
-            winnersListRef.current.push(m.name);
+          if (winRule === 'first') {
+            // --- Mode 1: 선착순 모드 (먼저 들어온 순서대로 1등 당첨) ---
+            if (winnersListRef.current.length < numWinners) {
+              const rank = winnersListRef.current.length + 1;
+              m.finishRank = rank;
+              winnersListRef.current.push(m.name);
 
-            // Trigger Winner celebration (Confetti plays ONLY for winning marbles!)
-            soundEngine.playWin('marble');
-            confetti({
-              particleCount: 90,
-              spread: 70,
-              origin: { y: 0.7 },
-              colors: [m.color, '#fbbf24', '#ffffff']
-            });
+              soundEngine.playWin('marble');
+              confetti({
+                particleCount: 90,
+                spread: 70,
+                origin: { y: 0.7 },
+                colors: [m.color, '#fbbf24', '#ffffff']
+              });
 
-            setWinners(prev => [...prev, { rank, name: m.name, color: m.color }]);
-            onWinnerDetermined(m.name, rank);
+              setWinners(prev => [...prev, { rank, name: m.name, color: m.color }]);
+              onWinnerDetermined(m.name, rank);
 
-            // If reached required winner count, complete the race
-            if (winnersListRef.current.length >= numWinners) {
-              setRaceState('completed');
-              setFinishCountdown(30);
+              if (winnersListRef.current.length >= numWinners) {
+                setRaceState('completed');
+                setFinishCountdown(30);
+              }
+            } else {
+              m.finishRank = 0;
             }
           } else {
-            // Already filled all winner slots - no confetti for subsequent balls
-            m.finishRank = 0;
+            // --- Mode 2: 서바이벌 모드 (거꾸로 늦게 들어와야 당첨 / 꼴찌 당첨) ---
+            const totalCount = marbles.length;
+            const eliminationTarget = Math.max(0, totalCount - numWinners);
+            const currentFinishedCount = marbles.filter(marble => marble.finished).length;
+
+            if (currentFinishedCount <= eliminationTarget) {
+              // 먼저 들어왔으므로 탈락!
+              m.finishRank = 0;
+              setEliminated(prev => [...prev, m.name]);
+              soundEngine.playMarbleBounce(0.35);
+              setBombAlert(`❌ [${m.name}] 골인... 탈락! (남은 생존: ${totalCount - currentFinishedCount}명)`);
+              setTimeout(() => setBombAlert(null), 1500);
+            } else {
+              // 최후의 생존 구슬 당첨! (가장 늦게 들어온 마지막 구슬이 1등)
+              const winnerSlot = currentFinishedCount - eliminationTarget;
+              const rank = (numWinners - winnerSlot + 1);
+              m.finishRank = rank;
+              winnersListRef.current.push(m.name);
+
+              soundEngine.playWin('marble');
+              confetti({
+                particleCount: 100,
+                spread: 75,
+                origin: { y: 0.65 },
+                colors: [m.color, '#10b981', '#fbbf24', '#ffffff']
+              });
+
+              setWinners(prev => [...prev, { rank, name: m.name, color: m.color }]);
+              onWinnerDetermined(m.name, rank);
+
+              if (winnersListRef.current.length >= numWinners) {
+                setRaceState('completed');
+                setFinishCountdown(30);
+              }
+            }
           }
         }
       }
@@ -1413,27 +1452,66 @@ export default function MarbleRace({
       {/* Race Top HUD */}
       <div className="w-full bg-slate-900/90 backdrop-blur-md p-4 rounded-3xl border border-slate-800 flex flex-wrap items-center justify-between gap-4 mb-4 shadow-2xl z-20">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-amber-500/20 text-amber-400 rounded-2xl border border-amber-500/30">
-            <Trophy className="w-6 h-6" />
+          <div className={cn(
+            "p-3 rounded-2xl border transition-colors",
+            winRule === 'last' 
+              ? "bg-purple-500/20 text-purple-400 border-purple-500/30" 
+              : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+          )}>
+            {winRule === 'last' ? <Hourglass className="w-6 h-6" /> : <Trophy className="w-6 h-6" />}
           </div>
           <div>
             <h3 className="text-lg font-black text-white flex items-center gap-2">
-              구슬 레이스 추첨
+              {winRule === 'last' ? "서바이벌 꼴찌 당첨 레이스" : "선착순 구슬 레이스"}
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold">
                 목표 {numWinners}명
               </span>
             </h3>
-            <p className="text-xs text-slate-400">결승선에 가장 먼저 도착한 구슬이 당첨됩니다!</p>
+            <p className="text-xs text-slate-400">
+              {winRule === 'last' 
+                ? "먼저 들어오면 탈락! 끝까지 버텨 가장 늦게 들어온 최후의 구슬이 당첨됩니다!" 
+                : "결승선에 가장 먼저 도착한 구슬이 당첨됩니다!"}
+            </p>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
+          {/* Win Rule Toggle (선착순 vs 꼴찌 서바이벌) */}
+          <button
+            onClick={() => {
+              if (raceState === 'ready') {
+                setWinRule(prev => prev === 'first' ? 'last' : 'first');
+              }
+            }}
+            disabled={raceState !== 'ready'}
+            className={cn(
+              "px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border shadow-sm",
+              winRule === 'last'
+                ? "bg-purple-500/25 text-purple-300 border-purple-500/40 hover:bg-purple-500/35"
+                : "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30",
+              raceState !== 'ready' && "opacity-60 cursor-not-allowed"
+            )}
+            title="클릭하여 당첨 방식을 선착순(1등) 또는 서바이벌(꼴찌 당첨)으로 변경합니다."
+          >
+            {winRule === 'last' ? (
+              <>
+                <Hourglass className="w-3.5 h-3.5 text-purple-400 animate-spin" />
+                <span>🐢 꼴찌 서바이벌 룰</span>
+              </>
+            ) : (
+              <>
+                <Trophy className="w-3.5 h-3.5 text-amber-400" />
+                <span>🏆 1등 선착순 룰</span>
+              </>
+            )}
+          </button>
+
           {/* Bomb Mode Toggle Button */}
           <button
             onClick={() => setBombMode(prev => !prev)}
             className={cn(
-              "px-3.5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border shadow-sm",
+              "px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border shadow-sm",
               bombMode 
                 ? "bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30" 
                 : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200"
@@ -1441,7 +1519,7 @@ export default function MarbleRace({
             title="레이스 도중 구슬들이 무작위로 폭발하며 충격파를 뿜어내는 모드입니다."
           >
             <Bomb className={cn("w-3.5 h-3.5", bombMode ? "text-rose-400 animate-pulse" : "text-slate-400")} />
-            <span>폭발 모드 {bombMode ? "ON" : "OFF"}</span>
+            <span>폭발 {bombMode ? "ON" : "OFF"}</span>
           </button>
 
           {raceState === 'ready' && (
@@ -1531,13 +1609,22 @@ export default function MarbleRace({
         </div>
 
         {/* Winners Trophy Board Overlay (Right Floating) */}
-        <div className="absolute top-4 right-4 bg-slate-900/85 backdrop-blur-md p-4 rounded-2xl border border-amber-500/30 shadow-2xl z-30 min-w-[200px]">
-          <p className="text-xs font-black uppercase text-amber-400 tracking-wider mb-3 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" /> 골인 당첨자 ({winners.length}/{numWinners})
+        <div className="absolute top-4 right-4 bg-slate-900/85 backdrop-blur-md p-4 rounded-2xl border border-amber-500/30 shadow-2xl z-30 min-w-[200px] max-w-[230px]">
+          <p className="text-xs font-black uppercase text-amber-400 tracking-wider mb-2 flex items-center gap-1.5">
+            {winRule === 'last' ? <Hourglass className="w-3.5 h-3.5 text-purple-400" /> : <Sparkles className="w-3.5 h-3.5 text-amber-400" />}
+            <span>{winRule === 'last' ? `생존 당첨 (${winners.length}/${numWinners})` : `골인 당첨 (${winners.length}/${numWinners})`}</span>
           </p>
-          <div className="space-y-2">
+          {winRule === 'last' && (
+            <p className="text-[10px] text-slate-400 font-bold mb-2 flex items-center justify-between">
+              <span>❌ 탈락: <strong className="text-rose-400">{eliminated.length}명</strong></span>
+              <span>🛡️ 생존: <strong className="text-emerald-400">{students.length - eliminated.length}명</strong></span>
+            </p>
+          )}
+          <div className="space-y-2 max-h-[220px] overflow-y-auto pr-1">
             {winners.length === 0 ? (
-              <p className="text-xs text-slate-500 italic">아직 골인한 구슬이 없습니다.</p>
+              <p className="text-xs text-slate-500 italic">
+                {winRule === 'last' ? "탈락 구슬 제외 후 최종 생존 구슬이 표시됩니다." : "아직 골인한 구슬이 없습니다."}
+              </p>
             ) : (
               winners.map(w => (
                 <div 
@@ -1550,8 +1637,11 @@ export default function MarbleRace({
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-black text-white truncate">{w.name}</p>
                   </div>
-                  <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/20 px-2 py-0.5 rounded-md">
-                    골인!
+                  <span className={cn(
+                    "text-[10px] font-bold px-2 py-0.5 rounded-md",
+                    winRule === 'last' ? "text-purple-300 bg-purple-500/20" : "text-emerald-400 bg-emerald-500/20"
+                  )}>
+                    {winRule === 'last' ? "생존!" : "골인!"}
                   </span>
                 </div>
               ))
@@ -1564,13 +1654,15 @@ export default function MarbleRace({
           <div className="absolute inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 sm:p-6 z-50 animate-in fade-in zoom-in-95">
             <div className="w-full max-w-md bg-slate-900 border-2 border-amber-400/80 rounded-3xl p-6 shadow-[0_0_60px_rgba(251,191,36,0.35)] flex flex-col items-center text-center">
               <div className="w-14 h-14 rounded-2xl bg-amber-400/20 border border-amber-400/50 flex items-center justify-center mb-3 text-amber-400 shadow-inner">
-                <Trophy className="w-8 h-8" />
+                {winRule === 'last' ? <Hourglass className="w-8 h-8 text-purple-400 animate-spin" /> : <Trophy className="w-8 h-8" />}
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white mb-1">
-                🎉 최종 당첨 구슬 골인 완료!
+                {winRule === 'last' ? "🐢 최후의 생존자 당첨 완료!" : "🎉 최종 당첨 구슬 골인 완료!"}
               </h2>
               <p className="text-xs sm:text-sm text-slate-300 mb-4">
-                선발된 <span className="text-amber-400 font-black">{winners.length}명</span>의 당첨 학생 명단입니다.
+                {winRule === 'last' 
+                  ? "먼저 들어온 공들은 모두 탈락하고, 끝까지 버텨 살아남은 최후의 당첨 명단입니다!" 
+                  : `선발된 ${winners.length}명의 당첨 학생 명단입니다.`}
               </p>
 
               {/* Winner List scrollable container */}
