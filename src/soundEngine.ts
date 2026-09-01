@@ -197,6 +197,25 @@ class SoundEngine {
     this.playTone(90, 'triangle', 0.4, 0, 0.5, 20);
   }
 
+  // Slow-mo cinematic overtake whoosh
+  public playSlowMoWhoosh() {
+    this.playNoise(0.8, 'lowpass', 350, 0, 0.6);
+    this.playTone(280, 'sine', 0.7, 0, 0.45, 60);
+    // Heartbeat thud
+    this.playTone(85, 'triangle', 0.35, 0.1, 0.6, 35);
+  }
+
+  // Speed boost pad sound
+  public playBoostPad() {
+    this.playTone(520, 'triangle', 0.15, 0, 0.3, 1400);
+  }
+
+  // Wormhole teleport sound
+  public playWarpSound() {
+    this.playTone(750, 'sine', 0.2, 0, 0.35, 1800);
+    this.playTone(1100, 'sine', 0.25, 0.08, 0.3, 500);
+  }
+
   public stopTick(effect: string) {
     // Clean up if any continuous sound is active
     if (this.continuousOsc) {

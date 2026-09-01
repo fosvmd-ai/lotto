@@ -79,6 +79,36 @@ interface Spinner {
   speed: number;
 }
 
+interface SpeedPad {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  boostY: number;
+  boostX?: number;
+}
+
+interface Wormhole {
+  id: string;
+  inX: number;
+  inY: number;
+  outX: number;
+  outY: number;
+  radius: number;
+  color: string;
+  pulse: number;
+}
+
+interface Pendulum {
+  anchorX: number;
+  anchorY: number;
+  length: number;
+  bobRadius: number;
+  angle: number;
+  speed: number;
+  maxAngle: number;
+}
+
 interface MarbleRaceProps {
   students: Student[];
   numWinners: number;
@@ -112,12 +142,23 @@ export default function MarbleRace({
   const [leaderboard, setLeaderboard] = useState<{ name: string; y: number; rank: number }[]>([]);
   const [bombMode, setBombMode] = useState<boolean>(true);
   const [bombAlert, setBombAlert] = useState<string | null>(null);
+  const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
   
   const marblesRef = useRef<Marble[]>([]);
   const pegsRef = useRef<Peg[]>([]);
   const bumpersRef = useRef<Bumper[]>([]);
   const rampsRef = useRef<Ramp[]>([]);
   const spinnersRef = useRef<Spinner[]>([]);
+  const speedPadsRef = useRef<SpeedPad[]>([]);
+  const wormholesRef = useRef<Wormhole[]>([]);
+  const pendulumsRef = useRef<Pendulum[]>([]);
+
+  // Overtake Slow-mo & Dynamic Camera Zoom
+  const leaderIdRef = useRef<string | null>(null);
+  const slowMoTimerRef = useRef<number>(0);
+  const slowMoCooldownRef = useRef<number>(0);
+  const zoomRef = useRef<number>(1.0);
+
   const shockwavesRef = useRef<Shockwave[]>([]);
   const particlesRef = useRef<ExplosionParticle[]>([]);
   const nextBombTimeRef = useRef<number>(0);
@@ -198,10 +239,33 @@ export default function MarbleRace({
     ramps.push({ x1: 0, y1: 3200, x2: 150, y2: 3320 });
     ramps.push({ x1: TRACK_WIDTH, y1: 3200, x2: TRACK_WIDTH - 150, y2: 3320 });
 
+    // --- Dynamic Reversal Gimmick 1: Speed Boost Pads ---
+    const speedPads: SpeedPad[] = [
+      { x: 250, y: 850, width: 200, height: 32, boostY: 16 },
+      { x: 100, y: 1580, width: 160, height: 30, boostY: 15, boostX: 4 },
+      { x: 440, y: 1580, width: 160, height: 30, boostY: 15, boostX: -4 },
+      { x: 270, y: 2880, width: 160, height: 32, boostY: 17 }
+    ];
+
+    // --- Dynamic Reversal Gimmick 2: Cosmic Warp Wormholes ---
+    const wormholes: Wormhole[] = [
+      { id: 'wh1', inX: 90, inY: 1320, outX: 520, outY: 1720, radius: 24, color: '#a855f7', pulse: 0 },
+      { id: 'wh2', inX: 610, inY: 2060, outX: 150, outY: 2420, radius: 24, color: '#06b6d4', pulse: 0 }
+    ];
+
+    // --- Dynamic Reversal Gimmick 3: Giant Swinging Pendulums ---
+    const pendulums: Pendulum[] = [
+      { anchorX: 350, anchorY: 1820, length: 150, bobRadius: 26, angle: -0.9, speed: 0.045, maxAngle: 1.1 },
+      { anchorX: 350, anchorY: 3020, length: 130, bobRadius: 24, angle: 0.8, speed: -0.05, maxAngle: 1.0 }
+    ];
+
     pegsRef.current = pegs;
     bumpersRef.current = bumpers;
     rampsRef.current = ramps;
     spinnersRef.current = spinners;
+    speedPadsRef.current = speedPads;
+    wormholesRef.current = wormholes;
+    pendulumsRef.current = pendulums;
   };
 
   // Initialize Marbles
@@ -257,12 +321,17 @@ export default function MarbleRace({
         if (prev <= 1) {
           clearInterval(timer);
           setRaceState('racing');
-          // Reset bomb schedule
+          // Reset bomb & overtake schedule
           nextBombTimeRef.current = Date.now() + 2500;
           shockwavesRef.current = [];
           particlesRef.current = [];
           screenShakeRef.current = 0;
+          leaderIdRef.current = null;
+          slowMoTimerRef.current = 0;
+          slowMoCooldownRef.current = 0;
+          zoomRef.current = 1.0;
           setBombAlert(null);
+          setOvertakeAlert(null);
           // Gate open sound
           soundEngine.playWin('marble');
           return 0;
@@ -281,7 +350,12 @@ export default function MarbleRace({
     shockwavesRef.current = [];
     particlesRef.current = [];
     screenShakeRef.current = 0;
+    leaderIdRef.current = null;
+    slowMoTimerRef.current = 0;
+    slowMoCooldownRef.current = 0;
+    zoomRef.current = 1.0;
     setBombAlert(null);
+    setOvertakeAlert(null);
     setRaceState('ready');
     setWinners([]);
     winnersListRef.current = [];
@@ -302,9 +376,31 @@ export default function MarbleRace({
     const wallElasticity = 0.7;
 
     const loop = () => {
+      // 0. Slow-mo timer & timeScale
+      if (slowMoTimerRef.current > 0) {
+        slowMoTimerRef.current--;
+      }
+      if (slowMoCooldownRef.current > 0) {
+        slowMoCooldownRef.current--;
+      }
+      const timeScale = slowMoTimerRef.current > 0 ? 0.3 : 1.0;
+
       // 1. Update Spinners
       spinnersRef.current.forEach(sp => {
-        sp.angle += sp.speed;
+        sp.angle += sp.speed * timeScale;
+      });
+
+      // 1-1. Update Pendulums
+      pendulumsRef.current.forEach(pd => {
+        pd.angle += pd.speed * timeScale;
+        if (pd.angle > pd.maxAngle || pd.angle < -pd.maxAngle) {
+          pd.speed = -pd.speed;
+        }
+      });
+
+      // 1-2. Update Wormholes pulse
+      wormholesRef.current.forEach(wh => {
+        if (wh.pulse > 0) wh.pulse = Math.max(0, wh.pulse - 0.05);
       });
 
       // 2. Update Bumpers pulse
@@ -317,6 +413,9 @@ export default function MarbleRace({
       const bumpers = bumpersRef.current;
       const ramps = rampsRef.current;
       const spinners = spinnersRef.current;
+      const speedPads = speedPadsRef.current;
+      const wormholes = wormholesRef.current;
+      const pendulums = pendulumsRef.current;
 
       // 2-1. Random Marble Explosion Trigger
       if (bombMode && raceState === 'racing') {
@@ -440,12 +539,12 @@ export default function MarbleRace({
           m.boostEffect--;
         }
 
-        m.vy += gravity;
-        m.vx *= friction;
-        m.vy *= friction;
+        m.vy += gravity * timeScale;
+        m.vx *= Math.pow(friction, timeScale);
+        m.vy *= Math.pow(friction, timeScale);
 
-        m.x += m.vx;
-        m.y += m.vy;
+        m.x += m.vx * timeScale;
+        m.y += m.vy * timeScale;
 
         // Trail
         m.trail.push({ x: m.x, y: m.y });
@@ -570,6 +669,69 @@ export default function MarbleRace({
           }
         }
 
+        // --- Gimmick Collision 1: Speed Boost Pads ---
+        for (let sp = 0; sp < speedPads.length; sp++) {
+          const pad = speedPads[sp];
+          if (
+            m.x >= pad.x && m.x <= pad.x + pad.width &&
+            m.y >= pad.y && m.y <= pad.y + pad.height
+          ) {
+            m.vy = Math.max(m.vy + pad.boostY, pad.boostY * 1.15);
+            if (pad.boostX) m.vx += pad.boostX;
+            m.boostEffect = 45;
+            soundEngine.playBoostPad();
+          }
+        }
+
+        // --- Gimmick Collision 2: Cosmic Warp Wormholes ---
+        for (let w = 0; w < wormholes.length; w++) {
+          const wh = wormholes[w];
+          const dx = m.x - wh.inX;
+          const dy = m.y - wh.inY;
+          if (Math.hypot(dx, dy) < wh.radius + m.radius) {
+            m.x = wh.outX + (Math.random() - 0.5) * 16;
+            m.y = wh.outY + 25;
+            m.vy = Math.max(m.vy, 9);
+            wh.pulse = 1;
+            soundEngine.playWarpSound();
+            // Spawn portal warp spark particles
+            for (let k = 0; k < 14; k++) {
+              particlesRef.current.push({
+                x: wh.outX,
+                y: wh.outY,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                size: 3.5,
+                color: wh.color,
+                alpha: 1,
+                life: 25
+              });
+            }
+          }
+        }
+
+        // --- Gimmick Collision 3: Giant Swinging Pendulums ---
+        for (let p = 0; p < pendulums.length; p++) {
+          const pd = pendulums[p];
+          const bobX = pd.anchorX + Math.sin(pd.angle) * pd.length;
+          const bobY = pd.anchorY + Math.cos(pd.angle) * pd.length;
+          const dx = m.x - bobX;
+          const dy = m.y - bobY;
+          const dist = Math.hypot(dx, dy);
+          const minDist = m.radius + pd.bobRadius;
+
+          if (dist < minDist && dist > 0.001) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+            m.x = bobX + nx * minDist;
+            m.y = bobY + ny * minDist;
+            const hammerSpeed = pd.speed * pd.length;
+            m.vx += nx * 14 + Math.cos(pd.angle) * hammerSpeed * 0.9;
+            m.vy += ny * 14;
+            playBounceSound();
+          }
+        }
+
         // Check Finish Line
         if (m.y >= FINISH_Y && !m.finished) {
           m.finished = true;
@@ -643,14 +805,38 @@ export default function MarbleRace({
         .map((m, idx) => ({ name: m.name, y: m.y, rank: idx + 1 }));
       setLeaderboard(sorted);
 
-      // 6. Smooth Camera Tracking
-      // Find the leading active marble (or average of leaders)
+      // 5-1. Overtake Detection & Slow-mo Trigger
       const activeMarbles = marbles.filter(m => !m.finished);
-      let targetCameraY = FINISH_Y - 300;
+      let currentLead: Marble | null = null;
       if (activeMarbles.length > 0) {
-        // Look at the first leader
-        const lead = activeMarbles.reduce((prev, curr) => (curr.y > prev.y ? curr : prev), activeMarbles[0]);
-        targetCameraY = lead.y - 250;
+        currentLead = activeMarbles.reduce((prev, curr) => (curr.y > prev.y ? curr : prev), activeMarbles[0]);
+        
+        // Check for 1st place overtake if past the starting zone
+        if (raceState === 'racing' && currentLead.y > 350 && currentLead.y < FINISH_Y) {
+          if (leaderIdRef.current && leaderIdRef.current !== currentLead.id) {
+            // A new marble has overtaken 1st place!
+            if (slowMoCooldownRef.current <= 0) {
+              slowMoTimerRef.current = 65; // ~1.1s slow motion
+              slowMoCooldownRef.current = 190; // ~3.2s cooldown
+              soundEngine.playSlowMoWhoosh();
+              setOvertakeAlert({ name: currentLead.name, color: currentLead.color });
+              setTimeout(() => setOvertakeAlert(null), 1800);
+            }
+          }
+          leaderIdRef.current = currentLead.id;
+        }
+      }
+
+      // 6. Smooth Camera Tracking with Dynamic Zoom
+      const targetZoom = slowMoTimerRef.current > 0 ? 1.6 : 1.0;
+      zoomRef.current += (targetZoom - zoomRef.current) * 0.08;
+      const currentZoom = zoomRef.current;
+
+      let targetCameraY = FINISH_Y - 300;
+      let leadX = TRACK_WIDTH / 2;
+      if (currentLead) {
+        targetCameraY = currentLead.y - 250;
+        leadX = currentLead.x;
       }
       targetCameraY = Math.max(0, Math.min(TRACK_HEIGHT - 650, targetCameraY));
       cameraY += (targetCameraY - cameraY) * 0.08;
@@ -668,7 +854,13 @@ export default function MarbleRace({
         screenShakeRef.current *= 0.86;
         if (screenShakeRef.current < 0.2) screenShakeRef.current = 0;
       }
-      ctx.translate(shakeX, -cameraY + shakeY);
+
+      // Dynamic Zoom & Close-up centering on 1st place marble!
+      const viewCenterX = canvas.width / 2;
+      const viewCenterY = 260;
+      ctx.translate(viewCenterX + shakeX, viewCenterY + shakeY);
+      ctx.scale(currentZoom, currentZoom);
+      ctx.translate(-leadX, -cameraY - viewCenterY);
 
       // Track Background & Side Rails
       ctx.fillStyle = '#0f172a';
@@ -755,6 +947,96 @@ export default function MarbleRace({
         ctx.fillRect(-sp.length / 2, -6, sp.length, 12);
         ctx.beginPath();
         ctx.arc(0, 0, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.restore();
+      });
+
+      // Draw Speed Boost Pads
+      speedPads.forEach(pad => {
+        ctx.save();
+        ctx.fillStyle = 'rgba(6, 182, 212, 0.2)';
+        ctx.strokeStyle = '#06b6d4';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(pad.x, pad.y, pad.width, pad.height, 8);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡ SPEED BOOST ⚡', pad.x + pad.width / 2, pad.y + pad.height / 2 + 5);
+        ctx.restore();
+      });
+
+      // Draw Wormholes
+      wormholes.forEach(wh => {
+        ctx.save();
+        const rot = (Date.now() * 0.003) % (Math.PI * 2);
+        // Entrance
+        ctx.beginPath();
+        ctx.arc(wh.inX, wh.inY, wh.radius + (wh.pulse * 6), 0, Math.PI * 2);
+        ctx.fillStyle = '#0f172a';
+        ctx.fill();
+        ctx.strokeStyle = wh.color;
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(wh.inX, wh.inY, wh.radius * 0.65, rot, rot + Math.PI * 1.5);
+        ctx.strokeStyle = '#f8fafc';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        ctx.fillStyle = wh.color;
+        ctx.font = 'bold 9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('WARP IN', wh.inX, wh.inY - wh.radius - 4);
+
+        // Exit
+        ctx.beginPath();
+        ctx.arc(wh.outX, wh.outY, wh.radius * 0.8, 0, Math.PI * 2);
+        ctx.strokeStyle = '#eab308';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = '#eab308';
+        ctx.fillText('WARP OUT', wh.outX, wh.outY - wh.radius - 4);
+        ctx.restore();
+      });
+
+      // Draw Giant Pendulums
+      pendulums.forEach(pd => {
+        ctx.save();
+        const bobX = pd.anchorX + Math.sin(pd.angle) * pd.length;
+        const bobY = pd.anchorY + Math.cos(pd.angle) * pd.length;
+
+        // Anchor
+        ctx.beginPath();
+        ctx.arc(pd.anchorX, pd.anchorY, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#64748b';
+        ctx.fill();
+
+        // Rod
+        ctx.beginPath();
+        ctx.moveTo(pd.anchorX, pd.anchorY);
+        ctx.lineTo(bobX, bobY);
+        ctx.strokeStyle = '#94a3b8';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+
+        // Heavy Hammer Head
+        ctx.beginPath();
+        ctx.arc(bobX, bobY, pd.bobRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#e11d48';
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+
+        // Center bolt
+        ctx.beginPath();
+        ctx.arc(bobX, bobY, pd.bobRadius * 0.4, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
         ctx.restore();
@@ -868,6 +1150,25 @@ export default function MarbleRace({
         ctx.lineWidth = m.isBomb ? 2.5 : 1.5;
         ctx.stroke();
 
+        // 1st Place Golden Crown on Current Leader
+        const isCurrent1st = currentLead && currentLead.id === m.id && !m.finished && raceState === 'racing';
+        if (isCurrent1st) {
+          ctx.save();
+          // Leader pulsing ring
+          const ringPulse = Math.sin(Date.now() * 0.01) * 3;
+          ctx.beginPath();
+          ctx.arc(m.x, m.y, m.radius + 6 + ringPulse, 0, Math.PI * 2);
+          ctx.strokeStyle = '#fbbf24';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Crown icon above tag
+          ctx.font = '16px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('👑', m.x, m.y - m.radius - (m.isBomb ? 38 : 22));
+          ctx.restore();
+        }
+
         // Bomb indicator emoji above name
         if (m.isBomb) {
           ctx.font = '16px sans-serif';
@@ -878,11 +1179,11 @@ export default function MarbleRace({
         // Student Name Tag above Marble
         ctx.font = 'bold 11px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillStyle = m.isBomb ? 'rgba(220, 38, 38, 0.95)' : 'rgba(15, 23, 42, 0.85)';
+        ctx.fillStyle = isCurrent1st ? '#fbbf24' : (m.isBomb ? 'rgba(220, 38, 38, 0.95)' : 'rgba(15, 23, 42, 0.85)');
         const textWidth = ctx.measureText(m.name).width;
         ctx.fillRect(m.x - textWidth / 2 - 4, m.y - m.radius - 18, textWidth + 8, 14);
 
-        ctx.fillStyle = '#ffffff';
+        ctx.fillStyle = isCurrent1st ? '#0f172a' : '#ffffff';
         ctx.fillText(m.name, m.x, m.y - m.radius - 7);
 
         // Rank Badge if finished
@@ -898,6 +1199,48 @@ export default function MarbleRace({
       });
 
       ctx.restore();
+
+      // --- Cinematic Slow-Mo Letterbox & Speed Lines Overlay ---
+      if (slowMoTimerRef.current > 0) {
+        ctx.save();
+        // Top & Bottom Cinematic Letterbox Bars
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        ctx.fillRect(0, 0, canvas.width, 32);
+        ctx.fillRect(0, canvas.height - 32, canvas.width, 32);
+
+        // Letterbox Neon accent lines
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, 32);
+        ctx.lineTo(canvas.width, 32);
+        ctx.moveTo(0, canvas.height - 32);
+        ctx.lineTo(canvas.width, canvas.height - 32);
+        ctx.stroke();
+
+        // Speed Lines around screen borders
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.3)';
+        ctx.lineWidth = 2;
+        for (let l = 0; l < 12; l++) {
+          const sx = (l / 12) * canvas.width;
+          ctx.beginPath();
+          ctx.moveTo(sx, 32);
+          ctx.lineTo(sx + (Math.random() - 0.5) * 30, 60);
+          ctx.stroke();
+
+          ctx.beginPath();
+          ctx.moveTo(sx, canvas.height - 32);
+          ctx.lineTo(sx + (Math.random() - 0.5) * 30, canvas.height - 60);
+          ctx.stroke();
+        }
+
+        // Center Letterbox Slow-Mo Indicator
+        ctx.fillStyle = '#fde047';
+        ctx.font = 'black 13px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⚡ SLOW MOTION OVERTAKE ⚡', canvas.width / 2, 21);
+        ctx.restore();
+      }
 
       animFrameRef.current = requestAnimationFrame(loop);
     };
@@ -975,6 +1318,14 @@ export default function MarbleRace({
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-rose-600/90 backdrop-blur-md text-white px-5 py-2 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-2 z-50 animate-bounce border border-rose-400">
             <Flame className="w-4 h-4 text-amber-300 fill-current" />
             <span>{bombAlert}</span>
+          </div>
+        )}
+
+        {/* Overtake Slow-Mo Alert Banner */}
+        {overtakeAlert && (
+          <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 px-6 py-2.5 rounded-2xl shadow-[0_0_35px_rgba(251,191,36,0.9)] font-black text-sm sm:text-base flex items-center gap-2.5 z-50 animate-in zoom-in-95 border-2 border-white">
+            <Sparkles className="w-5 h-5 text-slate-950 fill-current animate-spin" />
+            <span>🔥 1위 역전! [{overtakeAlert.name}] 선두 탈환!</span>
           </div>
         )}
 
