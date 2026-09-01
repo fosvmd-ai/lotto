@@ -77,6 +77,8 @@ interface Spinner {
   length: number;
   angle: number;
   speed: number;
+  anchorType?: 'center' | 'edge';
+  color?: string;
 }
 
 interface SpeedPad {
@@ -235,9 +237,26 @@ export default function MarbleRace({
     bumpers.push({ x: 160, y: 2650, radius: 25, pulse: 0 });
     bumpers.push({ x: 540, y: 2650, radius: 25, pulse: 0 });
 
-    // --- Section 5: Funnel leading into Finish Line (y: 3180 to FINISH_Y) ---
-    ramps.push({ x1: 0, y1: 3200, x2: 150, y2: 3320 });
-    ramps.push({ x1: TRACK_WIDTH, y1: 3200, x2: TRACK_WIDTH - 150, y2: 3320 });
+    // --- Section 5: Funnel Bottleneck & Rotating Barrier leading into Finish Line (y: 3120 to FINISH_Y) ---
+    // 1. Funnel Diagonal Convergence Walls (수렴하는 깔때기 사선 벽)
+    ramps.push({ x1: 20, y1: 3120, x2: 308, y2: 3230 });
+    ramps.push({ x1: TRACK_WIDTH - 20, y1: 3120, x2: 392, y2: 3230 });
+
+    // 2. Narrow Alley Straight Walls (좁은 골목 양쪽 벽)
+    ramps.push({ x1: 308, y1: 3230, x2: 308, y2: FINISH_Y + 40 });
+    ramps.push({ x1: 392, y1: 3230, x2: 392, y2: FINISH_Y + 40 });
+
+    // 3. Rotating Gate Barrier Bar on Alley Entrance (골목 입구에서 360도 회전하는 긴 방해 막대)
+    // Left anchor at (308, 3225), length 86px (골목 폭을 가로막으며 회전)
+    spinners.push({
+      x: 308,
+      y: 3225,
+      length: 86,
+      angle: 0,
+      speed: 0.045,
+      anchorType: 'edge',
+      color: '#f59e0b'
+    });
 
     // --- Dynamic Reversal Gimmick 1: Speed Boost Pads ---
     const speedPads: SpeedPad[] = [
@@ -638,15 +657,16 @@ export default function MarbleRace({
           }
         }
 
-        // Collision with Spinners
+        // Collision with Spinners & Rotating Barriers
         for (let s = 0; s < spinners.length; s++) {
           const sp = spinners[s];
+          const isEdge = sp.anchorType === 'edge';
           const cos = Math.cos(sp.angle);
           const sin = Math.sin(sp.angle);
-          const x1 = sp.x - cos * (sp.length / 2);
-          const y1 = sp.y - sin * (sp.length / 2);
-          const x2 = sp.x + cos * (sp.length / 2);
-          const y2 = sp.y + sin * (sp.length / 2);
+          const x1 = isEdge ? sp.x : sp.x - cos * (sp.length / 2);
+          const y1 = isEdge ? sp.y : sp.y - sin * (sp.length / 2);
+          const x2 = isEdge ? sp.x + cos * sp.length : sp.x + cos * (sp.length / 2);
+          const y2 = isEdge ? sp.y + sin * sp.length : sp.y + sin * (sp.length / 2);
 
           const rdx = x2 - x1;
           const rdy = y2 - y1;
@@ -662,9 +682,10 @@ export default function MarbleRace({
             m.x = closestX + nx * (m.radius + 6);
             m.y = closestY + ny * (m.radius + 6);
             // Spinner tangential velocity push
-            const tangentSpeed = sp.speed * sp.length;
-            m.vx = nx * 5 - sin * tangentSpeed;
-            m.vy = ny * 5 + cos * tangentSpeed;
+            const rotRadius = isEdge ? (u * sp.length) : (sp.length * 0.5);
+            const tangentSpeed = sp.speed * rotRadius;
+            m.vx = nx * 6 - sin * tangentSpeed * 1.2;
+            m.vy = ny * 6 + cos * tangentSpeed * 1.2;
             playBounceSound();
           }
         }
@@ -896,8 +917,9 @@ export default function MarbleRace({
 
       // Draw Ramps
       ramps.forEach(ramp => {
-        ctx.strokeStyle = '#6366f1';
-        ctx.lineWidth = 8;
+        const isBottleneckWall = ramp.y1 >= 3100 || ramp.y2 >= 3100;
+        ctx.strokeStyle = isBottleneckWall ? '#f59e0b' : '#6366f1';
+        ctx.lineWidth = isBottleneckWall ? 10 : 8;
         ctx.lineCap = 'round';
         ctx.beginPath();
         ctx.moveTo(ramp.x1, ramp.y1);
@@ -905,8 +927,8 @@ export default function MarbleRace({
         ctx.stroke();
 
         // Neon glow
-        ctx.strokeStyle = 'rgba(99, 102, 241, 0.3)';
-        ctx.lineWidth = 16;
+        ctx.strokeStyle = isBottleneckWall ? 'rgba(245, 158, 11, 0.4)' : 'rgba(99, 102, 241, 0.3)';
+        ctx.lineWidth = isBottleneckWall ? 20 : 16;
         ctx.stroke();
       });
 
@@ -938,17 +960,65 @@ export default function MarbleRace({
         ctx.fill();
       });
 
-      // Draw Spinners
+      // Draw Spinners & Rotating Barriers
       spinners.forEach(sp => {
         ctx.save();
         ctx.translate(sp.x, sp.y);
         ctx.rotate(sp.angle);
-        ctx.fillStyle = '#06b6d4';
-        ctx.fillRect(-sp.length / 2, -6, sp.length, 12);
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.fillStyle = '#ffffff';
-        ctx.fill();
+
+        if (sp.anchorType === 'edge') {
+          // --- Rotating Gate Barrier Bar on Alley Entrance ---
+          // Main hazard arm
+          ctx.fillStyle = sp.color || '#f59e0b';
+          ctx.fillRect(0, -6, sp.length, 12);
+          ctx.strokeStyle = '#0f172a';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(0, -6, sp.length, 12);
+
+          // Black hazard stripes
+          ctx.fillStyle = '#0f172a';
+          for (let s = 10; s < sp.length - 10; s += 16) {
+            ctx.beginPath();
+            ctx.moveTo(s, -6);
+            ctx.lineTo(s + 8, -6);
+            ctx.lineTo(s + 4, 6);
+            ctx.lineTo(s - 4, 6);
+            ctx.fill();
+          }
+
+          // Flashing red/amber beacon on the tip
+          const tipPulse = Math.sin(Date.now() * 0.015) > 0;
+          ctx.beginPath();
+          ctx.arc(sp.length - 4, 0, 6, 0, Math.PI * 2);
+          ctx.fillStyle = tipPulse ? '#ef4444' : '#fbbf24';
+          ctx.fill();
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Anchor Bearing Joint on the Wall
+          ctx.beginPath();
+          ctx.arc(0, 0, 11, 0, Math.PI * 2);
+          ctx.fillStyle = '#475569';
+          ctx.fill();
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 3;
+          ctx.stroke();
+
+          // Center Bolt
+          ctx.beginPath();
+          ctx.arc(0, 0, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        } else {
+          // Center-anchored rotating blade
+          ctx.fillStyle = sp.color || '#06b6d4';
+          ctx.fillRect(-sp.length / 2, -6, sp.length, 12);
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+        }
         ctx.restore();
       });
 
@@ -1042,22 +1112,32 @@ export default function MarbleRace({
         ctx.restore();
       });
 
-      // Draw Finish Line
+      // Draw Finish Line (Narrow Alley Goal & Checkered Pattern)
       ctx.save();
-      // Checkered Pattern
-      const sqSize = 16;
-      for (let x = 20; x < TRACK_WIDTH - 20; x += sqSize) {
-        for (let y = FINISH_Y; y < FINISH_Y + 32; y += sqSize) {
-          const isWhite = ((x / sqSize) + (y / sqSize)) % 2 === 0;
-          ctx.fillStyle = isWhite ? '#ffffff' : '#000000';
+      // Checkered Pattern inside the narrow alley (308 to 392)
+      const sqSize = 14;
+      for (let x = 308; x < 392; x += sqSize) {
+        for (let y = FINISH_Y; y < FINISH_Y + 28; y += sqSize) {
+          const isWhite = ((Math.floor(x / sqSize)) + (Math.floor(y / sqSize))) % 2 === 0;
+          ctx.fillStyle = isWhite ? '#ffffff' : '#0f172a';
           ctx.fillRect(x, y, sqSize, sqSize);
         }
       }
+      // Golden border around the goal alley
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 3;
+      ctx.strokeRect(308, FINISH_Y, 84, 28);
+
       // Finish Banner
       ctx.fillStyle = '#fbbf24';
-      ctx.font = 'black 22px sans-serif';
+      ctx.font = 'black 15px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('🏁 FINISH LINE 🏁', TRACK_WIDTH / 2, FINISH_Y - 12);
+      ctx.fillText('🏁 GOAL 🏁', TRACK_WIDTH / 2, FINISH_Y - 8);
+
+      // Warning text above bottleneck entrance
+      ctx.fillStyle = '#f87171';
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillText('⚠️ DANGER: FINAL ROTATING GATE BARRIER ⚠️', TRACK_WIDTH / 2, 3105);
       ctx.restore();
 
       // Draw Shockwaves
