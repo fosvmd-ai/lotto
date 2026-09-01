@@ -827,33 +827,33 @@ export default function MarbleRace({
         const isInsideFinishAlley = m.x >= ALLEY_L - 2 && m.x <= ALLEY_R + 2;
         if (m.y >= FINISH_Y && isInsideFinishAlley && !m.finished) {
           m.finished = true;
-          const rank = winnersListRef.current.length + 1;
-          m.finishRank = rank;
-          winnersListRef.current.push(m.name);
 
-          // Trigger Winner celebration
-          soundEngine.playWin('marble');
-          confetti({
-            particleCount: 100,
-            spread: 70,
-            origin: { y: 0.7 },
-            colors: [m.color, '#fbbf24', '#ffffff']
-          });
+          // Only trigger winner celebration & confetti for actual winners within numWinners!
+          if (winnersListRef.current.length < numWinners) {
+            const rank = winnersListRef.current.length + 1;
+            m.finishRank = rank;
+            winnersListRef.current.push(m.name);
 
-          setWinners(prev => [...prev, { rank, name: m.name, color: m.color }]);
-          onWinnerDetermined(m.name, rank);
-
-          // If reached required winner count
-          if (winnersListRef.current.length >= numWinners) {
-            setRaceState('completed');
-            setFinishCountdown(30);
+            // Trigger Winner celebration (Confetti plays ONLY for winning marbles!)
             soundEngine.playWin('marble');
             confetti({
-              particleCount: 180,
-              spread: 95,
-              origin: { y: 0.5 },
-              colors: ['#fbbf24', '#f59e0b', '#10b981', '#6366f1', '#ec4899']
+              particleCount: 90,
+              spread: 70,
+              origin: { y: 0.7 },
+              colors: [m.color, '#fbbf24', '#ffffff']
             });
+
+            setWinners(prev => [...prev, { rank, name: m.name, color: m.color }]);
+            onWinnerDetermined(m.name, rank);
+
+            // If reached required winner count, complete the race
+            if (winnersListRef.current.length >= numWinners) {
+              setRaceState('completed');
+              setFinishCountdown(30);
+            }
+          } else {
+            // Already filled all winner slots - no confetti for subsequent balls
+            m.finishRank = 0;
           }
         }
       }
