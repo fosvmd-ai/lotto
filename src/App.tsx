@@ -42,7 +42,12 @@ import {
   LayoutDashboard,
   ShieldCheck,
   Ticket,
-  CircleDot
+  CircleDot,
+  Atom,
+  Coins,
+  Flame,
+  Crown,
+  Wind
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -52,6 +57,13 @@ import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
 import soundEngine from './soundEngine';
 import MarbleRace from './components/MarbleRace';
+import SlotMachineEffect from './components/effects/SlotMachineEffect';
+import SupernovaExplosionEffect from './components/effects/SupernovaExplosionEffect';
+import MythicCardEffect from './components/effects/MythicCardEffect';
+import LegendaryBoxEffect from './components/effects/LegendaryBoxEffect';
+import AeroMachineEffect from './components/effects/AeroMachineEffect';
+import CyberBoardEffect from './components/effects/CyberBoardEffect';
+import StandardOrbEffect from './components/effects/StandardOrbEffect';
 
 // --- Types ---
 interface Student {
@@ -1375,14 +1387,14 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                       </div>
                       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
                         {[
-                          { id: 'standard', name: '로또 기계', icon: <RotateCcw className="w-4 h-4" /> },
-                          { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-4 h-4 text-amber-400" /> },
-                          { id: 'slot', name: '슬롯 머신', icon: <Play className="w-4 h-4" /> },
-                          { id: 'explosion', name: '대폭발', icon: <Sparkles className="w-4 h-4" /> },
-                          { id: 'card', name: '비밀 카드', icon: <Ticket className="w-4 h-4" /> },
-                          { id: 'box', name: '랜덤 박스', icon: <Package className="w-4 h-4" /> },
-                          { id: 'machine', name: '볼 머신', icon: <RotateCcw className="w-4 h-4" /> },
-                          { id: 'board', name: '우리반 로또', icon: <LayoutDashboard className="w-4 h-4" /> }
+                          { id: 'standard', name: '네온 코어', icon: <Atom className="w-5 h-5 text-indigo-400" /> },
+                          { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-5 h-5 text-amber-400" /> },
+                          { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-5 h-5 text-yellow-400" /> },
+                          { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-5 h-5 text-rose-500" /> },
+                          { id: 'card', name: '타로 카드', icon: <Crown className="w-5 h-5 text-purple-400" /> },
+                          { id: 'box', name: '황금 보물상자', icon: <Trophy className="w-5 h-5 text-amber-500" /> },
+                          { id: 'machine', name: '에어로 볼', icon: <Wind className="w-5 h-5 text-cyan-400" /> },
+                          { id: 'board', name: '사이버 전광판', icon: <LayoutDashboard className="w-5 h-5 text-emerald-400" /> }
                         ].map((eff) => (
                           <button
                             key={eff.id}
@@ -2275,14 +2287,14 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
           >
             <Sparkles style={{ color: gameState?.theme?.primaryColor || '#fbbf24' }} className="w-8 h-8" />
             <span className="drop-shadow-lg">
-              {effect === 'standard' && '로또 기계 추첨 중!'}
+              {effect === 'standard' && '네온 코어 퀀텀 추첨 중!'}
               {effect === 'marble' && '박진감 넘치는 구슬 레이스!'}
-              {effect === 'slot' && '행운의 슬롯 머신!'}
-              {effect === 'explosion' && '대폭발 추첨 중!'}
-              {effect === 'card' && '비밀의 카드 뒤집기!'}
-              {effect === 'box' && '두근두근 랜덤 박스!'}
-              {effect === 'machine' && '행운의 볼 머신 작동 중!'}
-              {effect === 'board' && '우리반 로또 추첨 중!'}
+              {effect === 'slot' && '라스베가스 777 잭팟 슬롯!'}
+              {effect === 'explosion' && '코스믹 초신성 대폭발 추첨!'}
+              {effect === 'card' && '운명의 3D 홀로그램 타로 플립!'}
+              {effect === 'box' && '전설의 황금 보물상자 개봉!'}
+              {effect === 'machine' && '에어로 볼 토네이도 머신!'}
+              {effect === 'board' && '사이버네틱 스테이지 전광판!'}
             </span>
             <Sparkles style={{ color: gameState?.theme?.primaryColor || '#fbbf24' }} className="w-8 h-8" />
           </motion.h2>
@@ -2392,322 +2404,73 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
               )}
 
         {effect === 'standard' && (
-          <div className="w-80 h-80 sm:w-96 sm:h-96 rounded-full border-8 border-slate-700 bg-slate-900 flex items-center justify-center relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)]">
-            {isAnimating && students.map((s, i) => (
-              <motion.div
-                key={s.id}
-                initial={{ x: 0, y: 0 }}
-                animate={{ 
-                  x: [Math.random() * 240 - 120, Math.random() * 240 - 120],
-                  y: [Math.random() * 240 - 120, Math.random() * 240 - 120],
-                  rotate: [0, 360]
-                }}
-                transition={{ duration: 0.3, repeat: Infinity, repeatType: "reverse" }}
-                className="absolute w-10 h-10 bg-gradient-to-br from-slate-500 to-slate-700 rounded-full flex items-center justify-center text-[10px] text-white font-bold border border-slate-400"
-              >
-                {s.name[0]}
-              </motion.div>
-            ))}
-            <div className="absolute inset-4 rounded-full border-4 border-slate-800 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
-              <motion.div 
-                animate={isAnimating ? { scale: [1, 1.2, 1], rotate: [0, 5, -5, 0] } : { scale: 1 }}
-                className="text-yellow-400 text-4xl sm:text-6xl font-black text-center px-4"
-              >
-                {isAnimating ? currentCandidate : '?'}
-              </motion.div>
-            </div>
-          </div>
+          <StandardOrbEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
 
         {effect === 'slot' && (
-          <div className="w-full h-64 bg-slate-900 border-8 border-yellow-600 rounded-3xl overflow-hidden relative shadow-[0_0_50px_rgba(202,138,4,0.3)]">
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentCandidate}
-                  initial={{ y: 100, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -100, opacity: 0 }}
-                  transition={{ duration: 0.05 }}
-                  className="text-5xl sm:text-7xl font-black text-yellow-400"
-                >
-                  {currentCandidate || '?'}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-            <div className="absolute inset-0 pointer-events-none bg-gradient-to-b from-slate-950 via-transparent to-slate-950 opacity-80" />
-          </div>
+          <SlotMachineEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
 
         {effect === 'explosion' && (
-          <div className="relative w-full h-full flex items-center justify-center">
-            {isAnimating && [...Array(12)].map((_, i) => (
-              <motion.div
-                key={i}
-                animate={{ 
-                  scale: [0, 1.5, 0],
-                  x: [0, (Math.random() - 0.5) * 400],
-                  y: [0, (Math.random() - 0.5) * 400],
-                  opacity: [0, 1, 0]
-                }}
-                transition={{ duration: 0.8, repeat: Infinity, delay: i * 0.1 }}
-                className="absolute w-12 h-12 bg-yellow-500 rounded-full blur-xl"
-              />
-            ))}
-            <motion.div
-              animate={isAnimating ? { 
-                scale: [1, 1.5, 1],
-                rotate: [0, 10, -10, 0]
-              } : {}}
-              className="text-6xl sm:text-8xl font-black text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.5)]"
-            >
-              {currentCandidate || '?'}
-            </motion.div>
-          </div>
+          <SupernovaExplosionEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
 
         {effect === 'card' && (
-          <div className="perspective-1000">
-            <motion.div
-              animate={isAnimating ? { rotateY: [0, 180, 360] } : {}}
-              transition={{ duration: 0.5, repeat: Infinity }}
-              className="w-64 h-80 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-2xl border-8 border-white shadow-2xl flex items-center justify-center"
-            >
-              <div className="text-slate-900 text-4xl sm:text-5xl font-black text-center px-4">
-                {currentCandidate || '?'}
-              </div>
-            </motion.div>
-          </div>
+          <MythicCardEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
 
         {effect === 'box' && (
-          <div className="relative flex flex-col items-center justify-center">
-            <motion.div
-              animate={isAnimating ? { 
-                rotate: [0, -10, 10, -10, 10, 0],
-                y: [0, -20, 0, -20, 0],
-                scale: [1, 1.1, 1, 1.1, 1]
-              } : {}}
-              transition={{ duration: 0.4, repeat: Infinity }}
-              className="relative"
-            >
-              <div className="w-48 h-48 sm:w-64 sm:h-64 bg-gradient-to-br from-yellow-400 to-orange-500 rounded-3xl shadow-2xl border-b-8 border-orange-700 flex items-center justify-center relative z-10">
-                <div className="text-white text-7xl sm:text-9xl font-black opacity-40">?</div>
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1/3 bg-yellow-300 rounded-t-3xl border-b-4 border-yellow-500 flex items-center justify-center">
-                  <div className="w-12 h-4 bg-red-500 rounded-full shadow-lg" />
-                </div>
-              </div>
-              
-              {/* Lid opening animation when finished */}
-              {!isAnimating && currentCandidate && (
-                <motion.div 
-                  initial={{ y: 0, opacity: 1 }}
-                  animate={{ y: -150, opacity: 0, rotate: -45 }}
-                  className="absolute top-0 left-0 w-full h-1/3 bg-yellow-300 rounded-t-3xl border-b-4 border-yellow-500 z-20"
-                />
-              )}
-            </motion.div>
-
-            <AnimatePresence>
-              {!isAnimating && currentCandidate && (
-                <motion.div
-                  initial={{ y: 50, scale: 0, opacity: 0 }}
-                  animate={{ y: -100, scale: 1.5, opacity: 1 }}
-                  className="absolute z-30 text-white text-5xl sm:text-7xl font-black drop-shadow-[0_0_20px_rgba(255,255,255,0.8)]"
-                >
-                  {currentCandidate}
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <LegendaryBoxEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
 
         {effect === 'machine' && (
-          <div className="relative w-full max-w-sm aspect-square flex items-center justify-center">
-            {/* The Cage (Machine) */}
-            <div className="w-80 h-80 sm:w-96 sm:h-96 rounded-full border-8 border-slate-700 bg-slate-900/40 backdrop-blur-md flex items-center justify-center relative overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.5)] border-t-slate-600 border-b-slate-800">
-               {/* Inner glass effect */}
-               <div className="absolute inset-2 rounded-full border border-white/10 bg-gradient-to-br from-white/5 to-transparent pointer-events-none" />
-               
-               {/* Rolling Balls */}
-               {isAnimating && students.map((s, i) => (
-                <motion.div
-                  key={s.id}
-                  initial={{ 
-                    x: Math.random() * 200 - 100, 
-                    y: Math.random() * 200 - 100 
-                  }}
-                  animate={{ 
-                    x: [
-                      Math.random() * 240 - 120, 
-                      Math.random() * 240 - 120,
-                      Math.random() * 240 - 120
-                    ],
-                    y: [
-                      Math.random() * 200 - 100, 
-                      Math.random() * -120,
-                      Math.random() * 120 
-                    ],
-                    rotate: [0, 360]
-                  }}
-                  transition={{ 
-                    duration: 0.4 + Math.random() * 0.2, 
-                    repeat: Infinity, 
-                    ease: "easeInOut"
-                  }}
-                  className="absolute w-8 h-8 rounded-full flex items-center justify-center text-[8px] text-white font-bold border border-white/20 shadow-inner"
-                  style={{ 
-                    backgroundColor: `hsl(${ (i * 137.5) % 360 }, 70%, 60%)`,
-                    boxShadow: 'inset -2px -2px 4px rgba(0,0,0,0.3), 2px 2px 4px rgba(255,255,255,0.2)'
-                  }}
-                >
-                  {s.name[0]}
-                </motion.div>
-              ))}
-
-              {/* Exit Pipe (Hole) */}
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-16 h-12 bg-slate-800 rounded-t-xl border-t-4 border-slate-600 flex items-center justify-center overflow-hidden">
-                <div className="w-8 h-8 bg-black rounded-full shadow-inner" />
-              </div>
-            </div>
-
-            {/* Support Base */}
-            <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-48 h-12 bg-slate-800 rounded-t-3xl border-t-4 border-slate-700 shadow-2xl" />
-
-            {/* Winning Ball Animation */}
-            <AnimatePresence>
-              {!isAnimating && currentCandidate && (
-                <motion.div
-                  initial={{ y: 200, scale: 0.5, opacity: 0, rotate: -180 }}
-                  animate={{ 
-                    y: -100, 
-                    scale: 2.5, 
-                    opacity: 1, 
-                    rotate: 0,
-                    x: [0, -10, 10, -10, 10, 0] 
-                  }}
-                  exit={{ scale: 0, opacity: 0 }}
-                  transition={{ 
-                    type: "spring",
-                    stiffness: 150,
-                    damping: 15
-                  }}
-                  className="absolute z-[80] w-24 h-24 rounded-full flex flex-col items-center justify-center text-center shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-4 border-white"
-                  style={{ 
-                    background: 'radial-gradient(circle at 30% 30%, #fbbf24, #f59e0b)',
-                  }}
-                >
-                  <div className="absolute inset-0 rounded-full border-t-2 border-white/40 pointer-events-none" />
-                  <span className="text-slate-900 font-black text-xl leading-none">{currentCandidate}</span>
-                  <div className="mt-1 w-8 h-1 bg-slate-900/20 rounded-full" />
-                  <span className="text-[10px] text-slate-800 font-bold">WINNER</span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <AeroMachineEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
 
         {effect === 'board' && (
-          <div className="w-full max-w-4xl bg-white/5 backdrop-blur-md p-6 rounded-[2.5rem] border border-white/10 shadow-2xl relative overflow-hidden">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-              {students.map((s, idx) => {
-                const isWinner = drawn.includes(s.name);
-                const isCurrentCandidate = currentCandidate === s.name;
-                
-                return (
-                  <motion.div
-                    key={s.id}
-                    animate={isCurrentCandidate ? { 
-                      scale: [1, 1.1, 1],
-                      backgroundColor: ['rgba(255,255,255,0.05)', 'rgba(251,191,36,0.3)', 'rgba(255,255,255,0.05)']
-                    } : {}}
-                    transition={isCurrentCandidate ? { duration: 0.1, repeat: Infinity } : {}}
-                    className={cn(
-                      "p-3 rounded-2xl border transition-all duration-300 flex items-center justify-center text-center relative h-16",
-                      isWinner 
-                        ? "bg-emerald-500/40 border-emerald-400 text-emerald-300 shadow-lg shadow-emerald-500/10" 
-                        : isCurrentCandidate 
-                          ? "bg-yellow-400/20 border-yellow-400 text-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.6)]" 
-                          : "bg-white/10 border-white/10 text-white/70"
-                    )}
-                  >
-                    <span className="text-sm sm:text-base font-black truncate px-1 uppercase tracking-tight">
-                      {s.name}
-                    </span>
-                    {isWinner && (
-                      <div className="absolute -top-1 -right-1 bg-emerald-500 rounded-full p-0.5 shadow-lg">
-                        <CheckCircle2 className="w-3 h-3 text-white" />
-                      </div>
-                    )}
-                    {isCurrentCandidate && (
-                      <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: [0, 1, 0] }}
-                        transition={{ repeat: Infinity, duration: 0.2 }}
-                        className="absolute inset-0 border-2 border-yellow-400 rounded-2xl pointer-events-none" 
-                      />
-                    )}
-                  </motion.div>
-                );
-              })}
-            </div>
-
-            {/* Big Winner Reveal Overlay */}
-            <AnimatePresence>
-              {!isAnimating && currentCandidate && (
-                <motion.div
-                  initial={{ scale: 0.5, opacity: 0, rotateY: 180 }}
-                  animate={{ scale: 1, opacity: 1, rotateY: 0 }}
-                  exit={{ scale: 0.5, opacity: 0, rotateY: -180 }}
-                  style={{ 
-                    backgroundColor: gameState?.theme?.primaryColor || '#4f46e5',
-                    boxShadow: '0 0 50px rgba(0,0,0,0.5), inset 0 0 40px rgba(255,255,255,0.2)'
-                  }}
-                  className="absolute inset-0 z-[100] flex flex-col items-center justify-center text-white border-8 border-white/30 m-2 sm:m-6 rounded-[3rem] overflow-hidden"
-                >
-                  {/* Decorative Background Patterns */}
-                  <div className="absolute inset-0 opacity-10 pointer-events-none">
-                    <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-transparent to-transparent" />
-                  </div>
-
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.2 }}
-                    className="mb-2 sm:mb-6 flex flex-col items-center"
-                  >
-                    <div className="w-16 h-16 sm:w-24 sm:h-24 bg-white/20 rounded-full flex items-center justify-center mb-4">
-                      <Trophy className="w-10 h-10 sm:w-16 sm:h-16 text-yellow-300 drop-shadow-lg" />
-                    </div>
-                    <p className="text-xs sm:text-lg font-black uppercase tracking-[0.4em] text-white/80">CONGRATULATIONS!</p>
-                  </motion.div>
-
-                  <motion.h3 
-                    initial={{ scale: 0.8 }}
-                    animate={{ scale: [0.8, 1.1, 1] }}
-                    transition={{ duration: 0.5, delay: 0.3 }}
-                    className="text-4xl sm:text-7xl font-black mb-6 sm:mb-10 flex items-center gap-4 text-center px-4"
-                  >
-                    <Sparkles className="w-6 h-6 sm:w-12 sm:h-12 text-yellow-300" />
-                    {currentCandidate}
-                    <Sparkles className="w-6 h-6 sm:w-12 sm:h-12 text-yellow-300" />
-                  </motion.h3>
-
-                  <motion.button 
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.6 }}
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => setCurrentCandidate('')}
-                    className="px-10 py-4 bg-white text-slate-900 rounded-2xl font-black text-sm sm:text-base uppercase tracking-widest shadow-2xl hover:bg-yellow-50 transition-colors"
-                  >
-                    확인 및 닫기
-                  </motion.button>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          <CyberBoardEffect 
+            students={students}
+            currentCandidate={currentCandidate}
+            isAnimating={isAnimating}
+            drawn={drawn}
+            primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+          />
         )}
       </div>
 
