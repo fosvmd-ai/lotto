@@ -2386,7 +2386,10 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
           ) : (
             <div className="flex-1 flex flex-col items-center w-full">
             {/* Main Animation Area */}
-            <div className="relative w-full aspect-video sm:aspect-square max-h-[400px] flex items-center justify-center mb-12">
+            <div className={cn(
+              "relative w-full flex items-center justify-center",
+              effect === 'board' ? "max-w-5xl min-h-[380px] mb-8" : "aspect-video sm:aspect-square max-h-[400px] max-w-2xl mb-12"
+            )}>
               {/* Interactive Trigger Overlay */}
               {!isAnimating && drawn.length < (gameState.numWinners || 5) && (
                 <motion.button
