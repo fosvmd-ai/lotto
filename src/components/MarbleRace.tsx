@@ -238,23 +238,27 @@ export default function MarbleRace({
     bumpers.push({ x: 160, y: 2650, radius: 25, pulse: 0 });
     bumpers.push({ x: 540, y: 2650, radius: 25, pulse: 0 });
 
-    // --- Section 5: Funnel Bottleneck & Rotating Barrier leading into Finish Line (y: 3120 to FINISH_Y) ---
+    // --- Section 5: Funnel Bottleneck & Rotating Barrier leading into Finish Line (y: 3080 to FINISH_Y) ---
+    const ALLEY_L = 305;
+    const ALLEY_R = 395;
+    const ALLEY_TOP = 3200;
+
     // 1. Funnel Diagonal Convergence Walls (수렴하는 깔때기 사선 벽)
-    ramps.push({ x1: 20, y1: 3120, x2: 308, y2: 3230 });
-    ramps.push({ x1: TRACK_WIDTH - 20, y1: 3120, x2: 392, y2: 3230 });
+    ramps.push({ x1: 20, y1: 3080, x2: ALLEY_L, y2: ALLEY_TOP });
+    ramps.push({ x1: TRACK_WIDTH - 20, y1: 3080, x2: ALLEY_R, y2: ALLEY_TOP });
 
     // 2. Narrow Alley Straight Walls (좁은 골목 양쪽 벽)
-    ramps.push({ x1: 308, y1: 3230, x2: 308, y2: FINISH_Y + 40 });
-    ramps.push({ x1: 392, y1: 3230, x2: 392, y2: FINISH_Y + 40 });
+    ramps.push({ x1: ALLEY_L, y1: ALLEY_TOP, x2: ALLEY_L, y2: FINISH_Y + 50 });
+    ramps.push({ x1: ALLEY_R, y1: ALLEY_TOP, x2: ALLEY_R, y2: FINISH_Y + 50 });
 
-    // 3. Rotating Gate Barrier Bar on Alley Entrance (골목 입구에서 시계 반대방향 360도 회전하는 긴 방해 막대)
-    // Left anchor at (308, 3225), length 110px (골목 입구를 강력하게 차단)
+    // 3. Rotating Gate Barrier Bar on Alley Entrance (골목 입구에서 시계 반대방향 360도 회전)
+    // Left anchor at (305, 3195), length 78px (골목 폭 90px 중 78px 차단, 오른쪽 벽을 파고들지 않음!)
     spinners.push({
-      x: 308,
-      y: 3225,
-      length: 110,
+      x: ALLEY_L,
+      y: ALLEY_TOP - 5,
+      length: 78,
       angle: 0,
-      speed: -0.048, // 시계 반대방향 회전!
+      speed: -0.046, // 시계 반대방향 회전!
       anchorType: 'edge',
       color: '#f59e0b'
     });
@@ -704,12 +708,13 @@ export default function MarbleRace({
             const ny = (m.y - closestY) / (dist || 1);
 
             if (isEdge) {
-              // Edge-anchored Gate Barrier: ALWAYS bounce the marble UPWARD away from alley!
-              m.y = Math.min(m.y, closestY - m.radius - 2);
-              m.x = closestX + nx * (m.radius + 6);
-              // Force strong upward bounce
-              m.vy = -Math.abs(m.vy) * 0.75 - 7;
-              m.vx += (Math.random() - 0.5) * 8 + nx * 5;
+              // Edge-anchored Gate Barrier:
+              // 1. Strictly keep inside alley horizontal bounds
+              m.x = Math.max(305 + m.radius + 2, Math.min(395 - m.radius - 2, m.x));
+              // 2. Launch ball strongly UPWARD out of the gate!
+              m.y = Math.min(m.y, 3200 - m.radius - 6);
+              m.vy = -Math.abs(m.vy) * 0.8 - 9;
+              m.vx = (Math.random() - 0.5) * 6;
             } else {
               m.x = closestX + nx * (m.radius + 6);
               m.y = closestY + ny * (m.radius + 6);
@@ -786,42 +791,40 @@ export default function MarbleRace({
           }
         }
 
-        // --- Hard Boundary Guard for Finish Funnel & Alley (Prevents wall clipping & tunneling) ---
-        if (m.y >= 3120) {
-          if (m.y >= 3230) {
-            // Inside the vertical alley zone (y >= 3230)
-            if (m.x >= 308 - m.radius && m.x <= 392 + m.radius) {
-              // Marble is inside alley: strictly confine between x = 308 and x = 392
-              if (m.x < 308 + m.radius) {
-                m.x = 308 + m.radius;
-                m.vx = Math.abs(m.vx) * 0.6;
-              } else if (m.x > 392 - m.radius) {
-                m.x = 392 - m.radius;
-                m.vx = -Math.abs(m.vx) * 0.6;
-              }
-            } else {
-              // Marble is OUTSIDE the alley: clamp strictly ABOVE the funnel slopes so it cannot drop down
-              if (m.x < 308) {
-                const slopeY = 3120 + ((m.x - 20) / (308 - 20)) * 110;
-                if (m.y > slopeY - m.radius) {
-                  m.y = slopeY - m.radius;
-                  m.vy = -Math.abs(m.vy) * 0.5 - 2;
-                  m.vx += 1.5;
-                }
-              } else if (m.x > 392) {
-                const slopeY = 3120 + ((680 - m.x) / (680 - 392)) * 110;
-                if (m.y > slopeY - m.radius) {
-                  m.y = slopeY - m.radius;
-                  m.vy = -Math.abs(m.vy) * 0.5 - 2;
-                  m.vx -= 1.5;
-                }
-              }
-            }
+        // --- 100% Solid Wall Enclosure for Finish Funnel & Alley (Prevents wall clipping & tunneling) ---
+        const ALLEY_L = 305;
+        const ALLEY_R = 395;
+        const ALLEY_TOP = 3200;
+
+        // A. Funnel zone (y: 3080 to ALLEY_TOP)
+        if (m.y >= 3080 && m.y < ALLEY_TOP) {
+          const progress = (m.y - 3080) / (ALLEY_TOP - 3080);
+          const leftWallX = 20 + progress * (ALLEY_L - 20);
+          if (m.x < leftWallX + m.radius) {
+            m.x = leftWallX + m.radius;
+            m.vx = Math.abs(m.vx) * 0.6 + 1.5;
+          }
+          const rightWallX = (TRACK_WIDTH - 20) - progress * ((TRACK_WIDTH - 20) - ALLEY_R);
+          if (m.x > rightWallX - m.radius) {
+            m.x = rightWallX - m.radius;
+            m.vx = -Math.abs(m.vx) * 0.6 - 1.5;
+          }
+        }
+
+        // B. Vertical Alley zone (y >= ALLEY_TOP)
+        if (m.y >= ALLEY_TOP) {
+          // Strictly confine marble within alley horizontal bounds [ALLEY_L + m.radius, ALLEY_R - m.radius]!
+          if (m.x < ALLEY_L + m.radius) {
+            m.x = ALLEY_L + m.radius;
+            m.vx = Math.abs(m.vx) * 0.6;
+          } else if (m.x > ALLEY_R - m.radius) {
+            m.x = ALLEY_R - m.radius;
+            m.vx = -Math.abs(m.vx) * 0.6;
           }
         }
 
         // Check Finish Line (STRICTLY VALID ONLY INSIDE THE NARROW ALLEY!)
-        const isInsideFinishAlley = m.x >= 308 - 4 && m.x <= 392 + 4;
+        const isInsideFinishAlley = m.x >= ALLEY_L - 2 && m.x <= ALLEY_R + 2;
         if (m.y >= FINISH_Y && isInsideFinishAlley && !m.finished) {
           m.finished = true;
           const rank = winnersListRef.current.length + 1;
@@ -1187,10 +1190,10 @@ export default function MarbleRace({
 
       // Draw Finish Line (Narrow Alley Goal & Checkered Pattern)
       ctx.save();
-      // Checkered Pattern inside the narrow alley (308 to 392)
-      const sqSize = 14;
-      for (let x = 308; x < 392; x += sqSize) {
-        for (let y = FINISH_Y; y < FINISH_Y + 28; y += sqSize) {
+      // Checkered Pattern inside the narrow alley (305 to 395)
+      const sqSize = 15;
+      for (let x = 305; x < 395; x += sqSize) {
+        for (let y = FINISH_Y; y < FINISH_Y + 30; y += sqSize) {
           const isWhite = ((Math.floor(x / sqSize)) + (Math.floor(y / sqSize))) % 2 === 0;
           ctx.fillStyle = isWhite ? '#ffffff' : '#0f172a';
           ctx.fillRect(x, y, sqSize, sqSize);
@@ -1199,7 +1202,7 @@ export default function MarbleRace({
       // Golden border around the goal alley
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 3;
-      ctx.strokeRect(308, FINISH_Y, 84, 28);
+      ctx.strokeRect(305, FINISH_Y, 90, 30);
 
       // Finish Banner
       ctx.fillStyle = '#fbbf24';
