@@ -392,7 +392,9 @@ export default function MarbleRace({
 
   // Manual / Auto Finish Handler
   const handleConfirmFinish = () => {
-    onRaceFinished(winnersListRef.current.slice(0, numWinners));
+    // Strictly sort winners by rank (1등 -> 2등 -> 3등...)
+    const sorted = [...winners].sort((a, b) => a.rank - b.rank).map(w => w.name);
+    onRaceFinished(sorted.slice(0, numWinners));
   };
 
   // Countdown when race completes (allows generous 30s viewing time or immediate button click)
@@ -929,13 +931,21 @@ export default function MarbleRace({
         }
       }
 
-      // 5. Update Leaderboard (top 5 by Y position)
+      // 5. Update Leaderboard (top 5 by current mode rank)
       const sorted = [...marbles]
         .sort((a, b) => {
-          if (a.finished && !b.finished) return -1;
-          if (!a.finished && b.finished) return 1;
-          if (a.finished && b.finished) return a.finishRank - b.finishRank;
-          return b.y - a.y;
+          if (winRule === 'first') {
+            if (a.finished && !b.finished) return -1;
+            if (!a.finished && b.finished) return 1;
+            if (a.finished && b.finished) return a.finishRank - b.finishRank;
+            return b.y - a.y;
+          } else {
+            // 꼴찌 서바이벌: 아직 트랙에 남아있는 구슬 중 가장 뒤(y가 작은) 구슬이 1등!
+            if (!a.finished && b.finished) return -1;
+            if (a.finished && !b.finished) return 1;
+            if (!a.finished && !b.finished) return a.y - b.y; // y가 작을수록 최후미 = 1등!
+            return a.finishRank - b.finishRank;
+          }
         })
         .slice(0, 5)
         .map((m, idx) => ({ name: m.name, y: m.y, rank: idx + 1 }));
@@ -945,12 +955,18 @@ export default function MarbleRace({
       const activeMarbles = marbles.filter(m => !m.finished);
       let currentLead: Marble | null = null;
       if (activeMarbles.length > 0) {
-        currentLead = activeMarbles.reduce((prev, curr) => (curr.y > prev.y ? curr : prev), activeMarbles[0]);
+        if (winRule === 'first') {
+          // 선착순 모드: 가장 앞선(y가 가장 큰) 구슬이 1등
+          currentLead = activeMarbles.reduce((prev, curr) => (curr.y > prev.y ? curr : prev), activeMarbles[0]);
+        } else {
+          // 꼴찌 서바이벌 모드: 가장 뒤처진(y가 가장 작은) 최후미 구슬이 1등!
+          currentLead = activeMarbles.reduce((prev, curr) => (curr.y < prev.y ? curr : prev), activeMarbles[0]);
+        }
         
         // Check for 1st place overtake if past the starting zone
-        if (raceState === 'racing' && currentLead.y > 350 && currentLead.y < FINISH_Y) {
+        if (raceState === 'racing' && currentLead.y > 250 && currentLead.y < FINISH_Y) {
           if (leaderIdRef.current && leaderIdRef.current !== currentLead.id) {
-            // A new marble has overtaken 1st place!
+            // A new marble has taken 1st place!
             if (slowMoCooldownRef.current <= 0) {
               slowMoTimerRef.current = 65; // ~1.1s slow motion
               slowMoCooldownRef.current = 190; // ~3.2s cooldown
@@ -971,6 +987,7 @@ export default function MarbleRace({
       let targetCameraY = FINISH_Y - 300;
       let leadX = TRACK_WIDTH / 2;
       if (currentLead) {
+        // 꼴찌 모드에서는 뒤처진 최후미 구슬을 포커스, 선착순 모드에서는 선두 구슬을 포커스!
         targetCameraY = currentLead.y - 250;
         leadX = currentLead.x;
       }
@@ -1383,13 +1400,24 @@ export default function MarbleRace({
 
         // Rank Badge if finished
         if (m.finished) {
-          ctx.beginPath();
-          ctx.arc(m.x, m.y, m.radius * 0.9, 0, Math.PI * 2);
-          ctx.fillStyle = '#fbbf24';
-          ctx.fill();
-          ctx.fillStyle = '#0f172a';
-          ctx.font = 'black 12px sans-serif';
-          ctx.fillText(`${m.finishRank}`, m.x, m.y + 4);
+          if (m.finishRank > 0) {
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, m.radius * 0.9, 0, Math.PI * 2);
+            ctx.fillStyle = '#fbbf24';
+            ctx.fill();
+            ctx.fillStyle = '#0f172a';
+            ctx.font = 'black 12px sans-serif';
+            ctx.fillText(`${m.finishRank}`, m.x, m.y + 4);
+          } else {
+            // Eliminated marble marker
+            ctx.beginPath();
+            ctx.arc(m.x, m.y, m.radius * 0.9, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+            ctx.fill();
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'black 9px sans-serif';
+            ctx.fillText('OUT', m.x, m.y + 3);
+          }
         }
       });
 
@@ -1450,34 +1478,43 @@ export default function MarbleRace({
   return (
     <div className="w-full max-w-4xl flex flex-col items-center select-none relative">
       {/* Race Top HUD */}
-      <div className="w-full bg-slate-900/90 backdrop-blur-md p-4 rounded-3xl border border-slate-800 flex flex-wrap items-center justify-between gap-4 mb-4 shadow-2xl z-20">
-        <div className="flex items-center gap-3">
+      <div className="w-full bg-slate-900/90 backdrop-blur-md p-4 rounded-3xl border border-slate-800 flex items-center justify-between gap-4 mb-4 shadow-2xl z-20">
+        {/* Left Title & Description (Fixed layout, no jitter) */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className={cn(
-            "p-3 rounded-2xl border transition-colors",
+            "p-3 rounded-2xl border transition-colors flex-shrink-0",
             winRule === 'last' 
               ? "bg-purple-500/20 text-purple-400 border-purple-500/30" 
               : "bg-amber-500/20 text-amber-400 border-amber-500/30"
           )}>
-            {winRule === 'last' ? <Hourglass className="w-6 h-6" /> : <Trophy className="w-6 h-6" />}
+            {winRule === 'last' ? <Hourglass className="w-6 h-6 animate-pulse" /> : <Trophy className="w-6 h-6" />}
           </div>
-          <div>
-            <h3 className="text-lg font-black text-white flex items-center gap-2">
-              {winRule === 'last' ? "서바이벌 꼴찌 당첨 레이스" : "선착순 구슬 레이스"}
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold">
+          <div className="min-w-0">
+            <h3 className="text-lg font-black text-white flex items-center gap-2 truncate">
+              구슬 레이스 추첨
+              <span className={cn(
+                "text-xs px-2.5 py-0.5 rounded-full border font-bold flex-shrink-0",
+                winRule === 'last'
+                  ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                  : "bg-amber-500/20 text-amber-300 border-amber-500/30"
+              )}>
+                {winRule === 'last' ? "🐢 꼴찌 서바이벌" : "🏆 1등 선착순"}
+              </span>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold flex-shrink-0">
                 목표 {numWinners}명
               </span>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-400 truncate h-5 flex items-center">
               {winRule === 'last' 
-                ? "먼저 들어오면 탈락! 끝까지 버텨 가장 늦게 들어온 최후의 구슬이 당첨됩니다!" 
+                ? "먼저 들어오면 탈락! 끝까지 버텨 가장 늦게 들어온 최후의 구슬이 1등!" 
                 : "결승선에 가장 먼저 도착한 구슬이 당첨됩니다!"}
             </p>
           </div>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2">
-          {/* Win Rule Toggle (선착순 vs 꼴찌 서바이벌) */}
+        {/* Action Buttons (Fixed sizes, no jittering) */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Win Rule Toggle (선착순 vs 꼴찌 서바이벌) - Fixed width 148px */}
           <button
             onClick={() => {
               if (raceState === 'ready') {
@@ -1486,7 +1523,7 @@ export default function MarbleRace({
             }}
             disabled={raceState !== 'ready'}
             className={cn(
-              "px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border shadow-sm",
+              "w-[148px] h-[40px] px-2 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all border shadow-sm flex-shrink-0",
               winRule === 'last'
                 ? "bg-purple-500/25 text-purple-300 border-purple-500/40 hover:bg-purple-500/35"
                 : "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30",
@@ -1496,29 +1533,29 @@ export default function MarbleRace({
           >
             {winRule === 'last' ? (
               <>
-                <Hourglass className="w-3.5 h-3.5 text-purple-400 animate-spin" />
-                <span>🐢 꼴찌 서바이벌 룰</span>
+                <Hourglass className="w-3.5 h-3.5 text-purple-400 animate-spin flex-shrink-0" />
+                <span>🐢 꼴찌 서바이벌</span>
               </>
             ) : (
               <>
-                <Trophy className="w-3.5 h-3.5 text-amber-400" />
-                <span>🏆 1등 선착순 룰</span>
+                <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
+                <span>🏆 1등 선착순</span>
               </>
             )}
           </button>
 
-          {/* Bomb Mode Toggle Button */}
+          {/* Bomb Mode Toggle Button - Fixed width 108px */}
           <button
             onClick={() => setBombMode(prev => !prev)}
             className={cn(
-              "px-3 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border shadow-sm",
+              "w-[108px] h-[40px] px-2 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all border shadow-sm flex-shrink-0",
               bombMode 
                 ? "bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30" 
                 : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200"
             )}
             title="레이스 도중 구슬들이 무작위로 폭발하며 충격파를 뿜어내는 모드입니다."
           >
-            <Bomb className={cn("w-3.5 h-3.5", bombMode ? "text-rose-400 animate-pulse" : "text-slate-400")} />
+            <Bomb className={cn("w-3.5 h-3.5 flex-shrink-0", bombMode ? "text-rose-400 animate-pulse" : "text-slate-400")} />
             <span>폭발 {bombMode ? "ON" : "OFF"}</span>
           </button>
 
@@ -1526,27 +1563,27 @@ export default function MarbleRace({
             <button
               onClick={startCountdown}
               style={{ backgroundColor: primaryColor }}
-              className="px-6 py-2.5 rounded-xl font-black text-slate-950 text-sm shadow-xl flex items-center gap-2 hover:scale-105 active:scale-95 transition-all"
+              className="h-[40px] px-5 py-2 rounded-xl font-black text-slate-950 text-xs sm:text-sm shadow-xl flex items-center justify-center gap-1.5 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
             >
               <Play className="w-4 h-4 fill-current" />
-              레이스 출발!
+              <span>출발!</span>
             </button>
           )}
 
           {(raceState === 'racing' || raceState === 'completed') && (
             <button
               onClick={resetRace}
-              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all border border-slate-700"
+              className="h-[40px] px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-slate-700 flex-shrink-0"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              다시 하기
+              <span>다시 하기</span>
             </button>
           )}
 
           {raceState === 'completed' && (
             <button
               onClick={handleConfirmFinish}
-              className="px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 rounded-xl font-black text-xs flex items-center gap-1.5 transition-all shadow-md animate-pulse"
+              className="h-[40px] px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md animate-pulse flex-shrink-0"
             >
               <Sparkles className="w-3.5 h-3.5 fill-current" />
               <span>결과 확정 ({finishCountdown}s)</span>
@@ -1569,7 +1606,11 @@ export default function MarbleRace({
         {overtakeAlert && (
           <div className="absolute top-12 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 via-yellow-300 to-amber-500 text-slate-950 px-6 py-2.5 rounded-2xl shadow-[0_0_35px_rgba(251,191,36,0.9)] font-black text-sm sm:text-base flex items-center gap-2.5 z-50 animate-in zoom-in-95 border-2 border-white">
             <Sparkles className="w-5 h-5 text-slate-950 fill-current animate-spin" />
-            <span>🔥 1위 역전! [{overtakeAlert.name}] 선두 탈환!</span>
+            <span>
+              {winRule === 'last' 
+                ? `🔥 최후의 생존 1위 역전! [${overtakeAlert.name}] 최후미 수성!` 
+                : `🔥 1위 역전! [${overtakeAlert.name}] 선두 탈환!`}
+            </span>
           </div>
         )}
 
