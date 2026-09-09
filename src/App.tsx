@@ -47,7 +47,9 @@ import {
   Coins,
   Flame,
   Crown,
-  Wind
+  Wind,
+  Search,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -784,12 +786,24 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     setIsModalOpen(true);
   };
 
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+
   const filteredStudents = useMemo(() => {
     if (!user?.email) return [];
     return students
       .filter(s => s.adminEmail === user.email || (!s.adminEmail && user.email === "fosvmd@gmail.com"))
-      .sort((a, b) => b.name.localeCompare(a.name));
+      .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
   }, [students, user?.email]);
+
+  const searchedStudents = useMemo(() => {
+    if (!studentSearchQuery.trim()) return filteredStudents;
+    const q = studentSearchQuery.trim().toLowerCase();
+    return filteredStudents.filter(s => s.name.toLowerCase().includes(q));
+  }, [filteredStudents, studentSearchQuery]);
+
+  const totalTicketsAll = useMemo(() => {
+    return filteredStudents.reduce((sum, s) => sum + (s.tickets || 1), 0);
+  }, [filteredStudents]);
 
   const filteredEntries = useMemo(() => {
     if (!user?.email) return [];
@@ -1273,69 +1287,129 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       )}
 
       {activeTab === 'students' && (
-        <div className="space-y-8">
-          <section className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
-                <Users className="w-5 h-5 text-indigo-600" />
-                학생 명단 관리 ({filteredStudents.length}명)
-              </h2>
-              <div className="flex gap-2">
+        <div className="space-y-6">
+          <section className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200">
+            {/* Header with Title & Action Buttons */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div>
+                <h2 className="text-xl font-black flex items-center gap-2 text-slate-900">
+                  <Users className="w-5 h-5 text-indigo-600" />
+                  학생 명단 관리
+                  <span className="text-sm font-bold px-2.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-full">
+                    {filteredStudents.length}명
+                  </span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">학생별 응모권을 부여하고 누적 기록을 관리합니다.</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
                 <button 
                   onClick={downloadTemplate}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 flex items-center gap-2 font-bold transition-all text-sm"
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 flex items-center gap-1.5 font-bold transition-all text-xs"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="w-3.5 h-3.5" />
                   양식 다운로드
                 </button>
-                <label className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl flex items-center gap-2 font-bold transition-all text-sm cursor-pointer">
-                  <Plus className="w-4 h-4" />
+                <label className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl flex items-center gap-1.5 font-bold transition-all text-xs cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" />
                   Excel 업로드
                   <input type="file" accept=".xlsx, .xls" onChange={handleExcelUpload} className="hidden" />
                 </label>
                 <button 
-                  onClick={deleteAllStudents}
-                  className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl flex items-center gap-2 font-bold transition-all text-sm"
+                  onClick={resetAllTickets}
+                  className="px-3.5 py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl flex items-center gap-1.5 font-bold transition-all text-xs"
                 >
-                  <Trash2 className="w-4 h-4" />
-                  전체 삭제
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  응모권 초기화
                 </button>
                 <button 
-                  onClick={resetAllTickets}
-                  className="px-4 py-2 bg-amber-50 hover:bg-amber-100 text-amber-600 rounded-xl flex items-center gap-2 font-bold transition-all text-sm"
+                  onClick={deleteAllStudents}
+                  className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl flex items-center gap-1.5 font-bold transition-all text-xs"
                 >
-                  <RotateCcw className="w-4 h-4" />
-                  응모권 초기화
+                  <Trash2 className="w-3.5 h-3.5" />
+                  전체 삭제
                 </button>
               </div>
             </div>
 
-            <div className="flex gap-2 mb-8">
-              <input 
-                type="text" 
-                value={newStudentName}
-                onChange={(e) => setNewStudentName(e.target.value)}
-                placeholder="학생 이름 입력"
-                className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
-                onKeyDown={(e) => e.key === 'Enter' && addStudent()}
-              />
-              <button 
-                onClick={addStudent}
-                className="bg-indigo-600 text-white px-8 py-3 rounded-2xl hover:bg-indigo-700 flex items-center gap-2 font-bold shadow-lg shadow-indigo-100 transition-all"
-              >
-                추가
-              </button>
+            {/* Input & Search Controls Bar */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-6">
+              {/* Add Student */}
+              <div className="md:col-span-7 flex gap-2">
+                <input 
+                  type="text" 
+                  value={newStudentName}
+                  onChange={(e) => setNewStudentName(e.target.value)}
+                  placeholder="새로운 학생 이름 입력"
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-slate-900"
+                  onKeyDown={(e) => e.key === 'Enter' && addStudent()}
+                />
+                <button 
+                  onClick={addStudent}
+                  className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl hover:bg-indigo-700 flex items-center gap-1.5 font-bold text-sm shadow-md shadow-indigo-100 transition-all shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  추가
+                </button>
+              </div>
+
+              {/* Quick Search */}
+              <div className="md:col-span-5 relative">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <input 
+                  type="text" 
+                  value={studentSearchQuery}
+                  onChange={(e) => setStudentSearchQuery(e.target.value)}
+                  placeholder="학생 이름 빠른 검색..."
+                  className="w-full pl-9.5 pr-8 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-sm text-slate-900"
+                />
+                {studentSearchQuery && (
+                  <button 
+                    onClick={() => setStudentSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* Status & Summary Stats Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50/80 rounded-2xl border border-slate-100 mb-6 text-xs font-semibold text-slate-600">
+              <div className="flex flex-wrap items-center gap-4">
+                <span className="flex items-center gap-1.5">
+                  <Users className="w-3.5 h-3.5 text-indigo-500" />
+                  등록 학생: <strong className="text-slate-900 font-black">{filteredStudents.length}명</strong>
+                </span>
+                <span className="text-slate-300">|</span>
+                <span className="flex items-center gap-1.5">
+                  <Ticket className="w-3.5 h-3.5 text-green-500" />
+                  총 응모권: <strong className="text-slate-900 font-black">{totalTicketsAll}장</strong>
+                </span>
+                <span className="text-slate-300">|</span>
+                <span className="flex items-center gap-1.5">
+                  <Coins className="w-3.5 h-3.5 text-amber-500" />
+                  총 누적 상금: <strong className="text-slate-900 font-black">{totalPrizeAll.toLocaleString()}{currencyUnit}</strong>
+                </span>
+              </div>
+
+              {studentSearchQuery && (
+                <span className="text-indigo-600 font-bold bg-indigo-50 px-2.5 py-1 rounded-lg">
+                  검색 결과 {searchedStudents.length}명
+                </span>
+              )}
+            </div>
+
+            {/* Pending Students Warning */}
             {pendingStudents.length > 0 && gameState?.status === 'waiting' && (
-              <div className="mb-8 p-6 bg-amber-50 rounded-3xl border border-amber-100">
-                <h3 className="text-sm font-bold text-amber-800 mb-4 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
-                  미응모 학생 ({pendingStudents.length}명)
+              <div className="mb-6 p-4 bg-amber-50/80 rounded-2xl border border-amber-100">
+                <h3 className="text-xs font-bold text-amber-800 mb-2.5 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                  아직 응모하지 않은 학생 ({pendingStudents.length}명)
                 </h3>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-1.5">
                   {pendingStudents.map(s => (
-                    <span key={s.id} className="px-3 py-1.5 bg-white border border-amber-200 rounded-xl text-xs text-amber-700 font-bold shadow-sm">
+                    <span key={s.id} className="px-2.5 py-1 bg-white border border-amber-200 rounded-lg text-xs text-amber-800 font-bold shadow-xs">
                       {s.name}
                     </span>
                   ))}
@@ -1343,54 +1417,87 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {filteredStudents.map(s => (
-                <div key={s.id} className="p-4 bg-white rounded-2xl border border-slate-100 group hover:border-indigo-200 hover:shadow-md transition-all flex flex-col gap-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-bold text-slate-900 mb-2">{s.name}</p>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">응모권</p>
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => updateTickets(s.id, s.tickets - 1)} 
-                          className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="text-xl font-black text-indigo-600 tabular-nums">{s.tickets}</span>
-                        <button 
-                          onClick={() => updateTickets(s.id, s.tickets + 1)} 
-                          className="w-8 h-8 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => deleteStudent(s.id)}
-                      className="text-slate-200 hover:text-red-500 transition-colors p-2"
+            {/* Compact Student Cards Grid */}
+            {searchedStudents.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
+                {searchedStudents.map(s => {
+                  const totalWinsCount = s.stats?.wins ? Object.values(s.stats.wins).reduce((a, b) => a + b, 0) : 0;
+                  const hasStats = s.stats && (s.stats.totalPrize > 0 || totalWinsCount > 0);
+
+                  return (
+                    <div 
+                      key={s.id} 
+                      className="p-3 bg-white rounded-2xl border border-slate-200/90 hover:border-indigo-400 hover:shadow-sm transition-all flex flex-col justify-between gap-2.5 group relative"
                     >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                  
-                  {s.stats && (s.stats.totalPrize > 0 || Object.keys(s.stats.wins).length > 0) && (
-                    <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {Object.entries(s.stats.wins).map(([rank, count]) => (
-                          <span key={rank} className="text-[9px] font-bold px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded-md">
-                            {rank}등:{count}회
+                      {/* Card Header: Initial Avatar + Name + Delete Button */}
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <div className="w-6 h-6 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center text-xs font-black shrink-0 border border-indigo-100">
+                            {s.name.slice(0, 1)}
+                          </div>
+                          <span className="font-bold text-slate-800 text-sm truncate" title={s.name}>
+                            {s.name}
                           </span>
-                        ))}
+                        </div>
+                        <button 
+                          onClick={() => deleteStudent(s.id)}
+                          title="학생 삭제"
+                          className="opacity-0 group-hover:opacity-100 text-slate-300 hover:text-red-500 hover:bg-red-50 p-1 rounded-lg transition-all shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
-                      <p className="text-[10px] font-black text-slate-900">
-                        {s.stats.totalPrize.toLocaleString()}{currencyUnit}
-                      </p>
+
+                      {/* Card Body: Compact Ticket Stepper */}
+                      <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-2 py-1">
+                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
+                          <Ticket className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>응모권</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button 
+                            onClick={() => updateTickets(s.id, (s.tickets || 1) - 1)} 
+                            className="w-5 h-5 bg-white border border-slate-200 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="text-xs font-black text-indigo-600 tabular-nums w-5 text-center">
+                            {s.tickets || 1}
+                          </span>
+                          <button 
+                            onClick={() => updateTickets(s.id, (s.tickets || 1) + 1)} 
+                            className="w-5 h-5 bg-white border border-slate-200 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Card Footer: Cumulative Stats (if exists) */}
+                      {hasStats && (
+                        <div className="pt-1.5 border-t border-slate-100 flex items-center justify-between text-[10px]">
+                          <span className="font-black text-amber-600 truncate flex items-center gap-0.5">
+                            <Coins className="w-3 h-3 shrink-0" />
+                            {s.stats!.totalPrize.toLocaleString()}{currencyUnit}
+                          </span>
+                          {totalWinsCount > 0 && (
+                            <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-md shrink-0">
+                              {totalWinsCount}회 당첨
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="py-12 text-center text-slate-400 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                <p className="text-sm font-medium">
+                  {studentSearchQuery ? `"${studentSearchQuery}" 검색 결과가 없습니다.` : "등록된 학생이 없습니다. 학생을 추가해주세요."}
+                </p>
+              </div>
+            )}
           </section>
         </div>
       )}
