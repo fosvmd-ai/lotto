@@ -899,6 +899,38 @@ export default function MarbleRace({
         }
       }
 
+      // --- Early Survival Auto-Win for Last Remaining Marble in Survival Mode ---
+      if (winRule === 'last' && raceState === 'racing') {
+        const remainingMarbles = marbles.filter(m => !m.finished);
+        if (remainingMarbles.length === 1) {
+          // Exactly 1 marble left on track! Instantly crown as 1st place winner!
+          const lastMarble = remainingMarbles[0];
+          lastMarble.finished = true;
+          lastMarble.finishRank = 1;
+          winnersListRef.current.push(lastMarble.name);
+
+          soundEngine.playWin('marble');
+          confetti({
+            particleCount: 160,
+            spread: 90,
+            origin: { y: 0.6 },
+            colors: [lastMarble.color, '#10b981', '#fbbf24', '#ffffff', '#ec4899']
+          });
+
+          setWinners(prev => {
+            const next = [...prev.filter(w => w.name !== lastMarble.name), { rank: 1, name: lastMarble.name, color: lastMarble.color }];
+            return next.sort((a, b) => a.rank - b.rank);
+          });
+          onWinnerDetermined(lastMarble.name, 1);
+
+          setBombAlert(`👑 최후의 1인 생존 확정! [${lastMarble.name}] 대망의 1등 당첨! 🎉`);
+          setTimeout(() => setBombAlert(null), 3000);
+
+          setRaceState('completed');
+          setFinishCountdown(30);
+        }
+      }
+
       // 4. Marble-to-Marble Collisions
       for (let i = 0; i < marbles.length; i++) {
         for (let j = i + 1; j < marbles.length; j++) {

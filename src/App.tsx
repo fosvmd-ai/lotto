@@ -113,6 +113,35 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// 로또 당첨 평가 및 순서 일치 2배 보너스 계산 유틸리티
+function evaluateTicket(
+  picks: string[],
+  winningNumbers: string[],
+  prizeCriteria: PrizeCriteria[]
+) {
+  if (!picks || !winningNumbers || winningNumbers.length === 0) {
+    return { matches: 0, rank: 0, isOrderMatched: false, baseAmount: 0, totalAmount: 0 };
+  }
+
+  const matches = picks.filter(p => winningNumbers.includes(p)).length;
+  const criteriaList = (prizeCriteria && prizeCriteria.length > 0) ? prizeCriteria : [];
+  const criterion = criteriaList.find(c => c.matches === matches);
+  const rank = criterion ? criterion.rank : 0;
+  const baseAmount = criterion ? (criterion.amount || 0) : 0;
+
+  // 순서 일치 (Exact Order Match): 맞춘 번호가 1개 이상이고, 선택한 순서가 추첨 결과의 순서와 1:1로 일치
+  const isOrderMatched = matches > 0 && picks.length > 0 && picks.every((p, idx) => idx < winningNumbers.length && p === winningNumbers[idx]);
+  const totalAmount = isOrderMatched ? baseAmount * 2 : baseAmount;
+
+  return {
+    matches,
+    rank,
+    isOrderMatched,
+    baseAmount,
+    totalAmount
+  };
+}
+
 // --- Error Handling ---
 enum OperationType {
   CREATE = 'create',
@@ -997,13 +1026,15 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     }
 
     const results = filteredEntries.map(entry => {
-      const matches = entry.picks.filter(p => gameState.winningNumbers.includes(p)).length;
-      const criteria = prizeCriteria.find(c => c.matches === matches);
+      const evaluation = evaluateTicket(entry.picks, gameState.winningNumbers, prizeCriteria);
+      const currency = gameState?.theme?.currencyUnit || '코인';
       return {
         "이름": entry.studentName,
         "선택한 번호": entry.picks.join(", "),
-        "맞춘 개수": matches,
-        "등수": criteria ? `${criteria.rank}등` : "꽝"
+        "맞춘 개수": evaluation.matches,
+        "등수": evaluation.rank > 0 ? `${evaluation.rank}등` : "꽝",
+        "순서 일치 여부": evaluation.isOrderMatched ? "✨ 순서 일치 (2배 보너스!)" : "일반",
+        "지급 당첨금": `${evaluation.totalAmount.toLocaleString()}${currency}`
       };
     }).sort((a, b) => {
       if (a.등수 === "꽝") return 1;
@@ -1630,7 +1661,7 @@ function StudentView({ studentName, students, entries, gameState }: {
 
   const [selectedNames, setSelectedNames] = useState<string[]>([]);
   const [showWinPopup, setShowWinPopup] = useState(false);
-  const [winInfo, setWinInfo] = useState<{ rank: number, matches: number } | null>(null);
+  const [winInfo, setWinInfo] = useState<{ rank: number; matches: number; isOrderMatched: boolean; totalAmount: number } | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ title: string, content: string } | null>(null);
@@ -1666,11 +1697,15 @@ function StudentView({ studentName, students, entries, gameState }: {
   useEffect(() => {
     if (gameState?.status === 'finished' && myEntries.length > 0) {
       const lastEntry = myEntries[myEntries.length - 1];
-      const matches = lastEntry.picks.filter(p => gameState.winningNumbers.includes(p)).length;
-      const criteria = (gameState.prizeCriteria || []).find(c => c.matches === matches);
+      const evaluation = evaluateTicket(lastEntry.picks, gameState.winningNumbers, gameState.prizeCriteria || []);
       
-      if (criteria) {
-        setWinInfo({ rank: criteria.rank, matches });
+      if (evaluation.rank > 0) {
+        setWinInfo({ 
+          rank: evaluation.rank, 
+          matches: evaluation.matches,
+          isOrderMatched: evaluation.isOrderMatched,
+          totalAmount: evaluation.totalAmount
+        });
         setShowWinPopup(true);
         soundEngine.unlockAudio().then(() => {
           soundEngine.playWin(gameState?.drawEffect || 'standard');
@@ -1723,11 +1758,20 @@ function StudentView({ studentName, students, entries, gameState }: {
                   <Trophy className="w-10 h-10 text-yellow-600" />
                 </div>
                 <h2 className="text-3xl font-black text-slate-900 mb-2">축하합니다!</h2>
-                <p className="text-slate-500 mb-6">
-                  {studentName}님은 <span className="text-indigo-600 font-bold">{winInfo.matches}개</span>를 맞춰<br/>
-                  <span className="text-2xl font-black text-indigo-600">{winInfo.rank}등</span>에 당첨되었습니다!<br/>
+                <div className="text-slate-500 mb-6">
+                  <p>
+                    {studentName}님은 <span className="text-indigo-600 font-bold">{winInfo.matches}개</span>를 맞춰<br/>
+                    <span className="text-2xl font-black text-indigo-600">{winInfo.rank}등</span>에 당첨되었습니다!
+                  </p>
+                  {winInfo.isOrderMatched && (
+                    <div className="my-2.5">
+                      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-black border border-amber-300 shadow-sm animate-pulse">
+                        ✨ 입력 순서까지 100% 일치! [보너스 2배]
+                      </span>
+                    </div>
+                  )}
                   <span className="text-lg font-bold text-emerald-600 mt-2 block">
-                    + {( ( (gameState?.prizeCriteria || []).find(c => c.rank === winInfo.rank)?.amount || 0 ) ).toLocaleString()}{gameState?.theme?.currencyUnit || '코인'} 획득!
+                    + {winInfo.totalAmount.toLocaleString()}{gameState?.theme?.currencyUnit || '코인'} 획득!
                   </span>
                   <div className="mt-4 pt-4 border-t border-slate-100">
                     <p className="text-xs font-bold text-slate-400 uppercase mb-1">나의 총 누적 상금</p>
@@ -1735,7 +1779,7 @@ function StudentView({ studentName, students, entries, gameState }: {
                       {(myStudent?.stats?.totalPrize || 0).toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}
                     </p>
                   </div>
-                </p>
+                </div>
                 <button 
                   onClick={() => setShowWinPopup(false)}
                   className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-200"
@@ -2035,15 +2079,15 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
   const winners = useMemo(() => {
     if (drawn.length === 0) return [];
     
-    const criteria = (gameState.prizeCriteria && gameState.prizeCriteria.length > 0) 
-      ? gameState.prizeCriteria 
-      : [];
-
     return entries.map(e => {
-      const matches = e.picks.filter(p => drawn.includes(p)).length;
-      const criterion = criteria.find(c => c.matches === matches);
-      const rank = criterion ? criterion.rank : 0;
-      return { ...e, matches, rank };
+      const evaluation = evaluateTicket(e.picks, drawn, gameState.prizeCriteria || []);
+      return { 
+        ...e, 
+        matches: evaluation.matches, 
+        rank: evaluation.rank,
+        isOrderMatched: evaluation.isOrderMatched,
+        totalAmount: evaluation.totalAmount
+      };
     }).filter(e => e.rank > 0).sort((a, b) => a.rank - b.rank);
   }, [entries, drawn, gameState.prizeCriteria]);
 
@@ -2177,18 +2221,13 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                 const resultsByStudent: Record<string, { wins: Record<number, number>, totalPrize: number }> = {};
                 
                 entries.forEach(entry => {
-                  const matches = entry.picks.filter(p => newDrawn.includes(p)).length;
-                  const criteriaList = (gameState.prizeCriteria && gameState.prizeCriteria.length > 0) 
-                    ? gameState.prizeCriteria 
-                    : [];
-                  
-                  const criterion = criteriaList.find(c => c.matches === matches);
-                  if (criterion) {
+                  const evaluation = evaluateTicket(entry.picks, newDrawn, gameState.prizeCriteria || []);
+                  if (evaluation.rank > 0) {
                     if (!resultsByStudent[entry.studentName]) {
                       resultsByStudent[entry.studentName] = { wins: {}, totalPrize: 0 };
                     }
-                    resultsByStudent[entry.studentName].wins[criterion.rank] = (resultsByStudent[entry.studentName].wins[criterion.rank] || 0) + 1;
-                    resultsByStudent[entry.studentName].totalPrize += (criterion.amount || 0);
+                    resultsByStudent[entry.studentName].wins[evaluation.rank] = (resultsByStudent[entry.studentName].wins[evaluation.rank] || 0) + 1;
+                    resultsByStudent[entry.studentName].totalPrize += evaluation.totalAmount;
                   }
                 });
 
@@ -2333,17 +2372,13 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                     const recordStats = async () => {
                       const resultsByStudent: Record<string, { wins: Record<number, number>, totalPrize: number }> = {};
                       entries.forEach(entry => {
-                        const matches = entry.picks.filter(p => finalWinners.includes(p)).length;
-                        const criteriaList = (gameState.prizeCriteria && gameState.prizeCriteria.length > 0) 
-                          ? gameState.prizeCriteria 
-                          : [];
-                        const criterion = criteriaList.find(c => c.matches === matches);
-                        if (criterion) {
+                        const evaluation = evaluateTicket(entry.picks, finalWinners, gameState.prizeCriteria || []);
+                        if (evaluation.rank > 0) {
                           if (!resultsByStudent[entry.studentName]) {
                             resultsByStudent[entry.studentName] = { wins: {}, totalPrize: 0 };
                           }
-                          resultsByStudent[entry.studentName].wins[criterion.rank] = (resultsByStudent[entry.studentName].wins[criterion.rank] || 0) + 1;
-                          resultsByStudent[entry.studentName].totalPrize += (criterion.amount || 0);
+                          resultsByStudent[entry.studentName].wins[evaluation.rank] = (resultsByStudent[entry.studentName].wins[evaluation.rank] || 0) + 1;
+                          resultsByStudent[entry.studentName].totalPrize += evaluation.totalAmount;
                         }
                       });
 
@@ -2566,31 +2601,30 @@ function ResultsView({ students, entries, gameState, myEntries }: {
   const winners = useMemo(() => {
     if (!gameState?.winningNumbers) return [];
     
-    // Fallback criteria if missing in gameState
-    const criteria = (gameState.prizeCriteria && gameState.prizeCriteria.length > 0) 
-      ? gameState.prizeCriteria 
-      : [];
-
     return entries.map(e => {
-      const matches = e.picks.filter(p => gameState.winningNumbers.includes(p)).length;
-      const criterion = criteria.find(c => c.matches === matches);
-      const rank = criterion ? criterion.rank : 0;
-      return { ...e, matches, rank };
+      const evaluation = evaluateTicket(e.picks, gameState.winningNumbers, gameState.prizeCriteria || []);
+      return { 
+        ...e, 
+        matches: evaluation.matches, 
+        rank: evaluation.rank,
+        isOrderMatched: evaluation.isOrderMatched,
+        totalAmount: evaluation.totalAmount
+      };
     }).filter(e => e.rank > 0).sort((a, b) => a.rank - b.rank);
   }, [entries, gameState]);
 
   const myResults = useMemo(() => {
     if (!myEntries.length || !gameState?.winningNumbers) return [];
     
-    const criteria = (gameState.prizeCriteria && gameState.prizeCriteria.length > 0) 
-      ? gameState.prizeCriteria 
-      : [];
-
     return myEntries.map(entry => {
-      const matches = entry.picks.filter(p => gameState.winningNumbers.includes(p)).length;
-      const criterion = criteria.find(c => c.matches === matches);
-      const rank = criterion ? criterion.rank : 0;
-      return { entry, matches, rank };
+      const evaluation = evaluateTicket(entry.picks, gameState.winningNumbers, gameState.prizeCriteria || []);
+      return { 
+        entry, 
+        matches: evaluation.matches, 
+        rank: evaluation.rank,
+        isOrderMatched: evaluation.isOrderMatched,
+        totalAmount: evaluation.totalAmount
+      };
     });
   }, [myEntries, gameState]);
 
@@ -2641,11 +2675,16 @@ function ResultsView({ students, entries, gameState, myEntries }: {
                 </div>
                 <div className="text-right">
                   <p className="text-xs text-slate-400">{res.matches}개 일치</p>
+                  {res.isOrderMatched && res.rank > 0 && (
+                    <span className="inline-block text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 my-0.5 animate-pulse">
+                      ✨ 순서 일치 (2배 보너스!)
+                    </span>
+                  )}
                   <p className={cn(
                     "text-lg font-bold",
                     res.rank > 0 ? "text-yellow-400" : "text-slate-500"
                   )}>
-                    {res.rank ? `${res.rank}등 당첨!` : '낙첨'}
+                    {res.rank ? `${res.rank}등 당첨! (+${res.totalAmount.toLocaleString()}${gameState?.theme?.currencyUnit || '코인'})` : '낙첨'}
                   </p>
                 </div>
               </div>
@@ -2674,7 +2713,14 @@ function ResultsView({ students, entries, gameState, myEntries }: {
                   {w.rank}
                 </div>
                 <div>
-                  <p className="font-bold text-white">{w.studentName}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-white">{w.studentName}</p>
+                    {w.isOrderMatched && (
+                      <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 animate-pulse">
+                        ✨ 순서 일치 (2배 보너스!)
+                      </span>
+                    )}
+                  </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {w.picks.map((p, idx) => (
                       <span key={idx} className={cn(
@@ -2685,7 +2731,9 @@ function ResultsView({ students, entries, gameState, myEntries }: {
                       </span>
                     ))}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">{w.matches}개 일치</p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    {w.matches}개 일치 · <span className="text-emerald-400 font-bold">+{w.totalAmount.toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}</span>
+                  </p>
                 </div>
               </div>
             </div>
