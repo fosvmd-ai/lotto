@@ -113,6 +113,15 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+// 문자열 정규화 (앞뒤 공백 제거, 소문자 통일)
+function normalizeItem(s: any): string {
+  return String(s ?? '').trim().toLowerCase();
+}
+
+function isItemMatched(item1: any, item2: any): boolean {
+  return normalizeItem(item1) === normalizeItem(item2);
+}
+
 // 로또 당첨 평가 및 순서 일치 2배 보너스 계산 유틸리티
 function evaluateTicket(
   picks: string[],
@@ -123,14 +132,18 @@ function evaluateTicket(
     return { matches: 0, rank: 0, isOrderMatched: false, baseAmount: 0, totalAmount: 0 };
   }
 
-  const matches = picks.filter(p => winningNumbers.includes(p)).length;
+  const normWinners = winningNumbers.map(normalizeItem);
+  const normPicks = picks.map(normalizeItem);
+
+  // 맞춘 개수 (정규화 비교)
+  const matches = normPicks.filter(p => normWinners.includes(p)).length;
   const criteriaList = (prizeCriteria && prizeCriteria.length > 0) ? prizeCriteria : [];
   const criterion = criteriaList.find(c => c.matches === matches);
   const rank = criterion ? criterion.rank : 0;
   const baseAmount = criterion ? (criterion.amount || 0) : 0;
 
   // 순서 일치 (Exact Order Match): 맞춘 번호가 1개 이상이고, 선택한 순서가 추첨 결과의 순서와 1:1로 일치
-  const isOrderMatched = matches > 0 && picks.length > 0 && picks.every((p, idx) => idx < winningNumbers.length && p === winningNumbers[idx]);
+  const isOrderMatched = matches > 0 && normPicks.length > 0 && normPicks.every((p, idx) => idx < normWinners.length && p === normWinners[idx]);
   const totalAmount = isOrderMatched ? baseAmount * 2 : baseAmount;
 
   return {
@@ -1721,6 +1734,7 @@ function StudentView({ studentName, students, entries, gameState }: {
           studentName={studentName}
           myEntries={myEntries}
           gameState={gameState}
+          myStudent={myStudent}
         />
       ) : gameState?.status === 'finished' ? (
         <div className="space-y-8">
@@ -1934,10 +1948,11 @@ function StudentView({ studentName, students, entries, gameState }: {
 import confetti from 'canvas-confetti';
 
 // --- Student Real-time Drawing View ---
-function StudentRealTimeView({ studentName, myEntries, gameState }: {
+function StudentRealTimeView({ studentName, myEntries, gameState, myStudent }: {
   studentName: string,
   myEntries: Entry[],
-  gameState: GameState | null
+  gameState: GameState | null,
+  myStudent?: Student
 }) {
   if (!gameState) return null;
   const currentDrawn = gameState.currentDrawn || [];
@@ -1956,18 +1971,33 @@ function StudentRealTimeView({ studentName, myEntries, gameState }: {
               <Sparkles className="w-8 h-8 text-yellow-300" />
               실시간 추첨 현황
             </h2>
-            <p className="text-indigo-100 font-medium">현재 선생님이 번호를 추첨하고 있어요!</p>
+            <p className="text-indigo-100 font-medium">{studentName}님, 현재 선생님이 번호를 추첨하고 있어요!</p>
           </div>
 
-          <div className="bg-white/10 backdrop-blur-md px-6 py-4 rounded-3xl border border-white/20 flex items-center gap-4">
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold text-indigo-200 mb-1">진행률</p>
-              <p className="text-xl font-black">{currentDrawn.length} / {gameState.numWinners || 5}</p>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* My Cumulative Prize Display during live game */}
+            <div className="bg-amber-400/20 backdrop-blur-md px-5 py-3 rounded-2xl border border-amber-300/40 flex items-center gap-3 shadow-lg">
+              <div className="w-10 h-10 bg-amber-400 text-amber-950 rounded-xl flex items-center justify-center font-black shadow-sm">
+                <Coins className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-[10px] uppercase font-bold text-amber-200">나의 총 누적 상금</p>
+                <p className="text-xl font-black text-amber-300 drop-shadow-sm">
+                  {(myStudent?.stats?.totalPrize || 0).toLocaleString()}{gameState.theme?.currencyUnit || '코인'}
+                </p>
+              </div>
             </div>
-            <div className="w-px h-8 bg-white/20" />
-            <div className="text-center">
-              <p className="text-[10px] uppercase font-bold text-indigo-200 mb-1">기다리는 번호</p>
-              <p className="text-xl font-black">{(gameState.numWinners || 5) - currentDrawn.length}개</p>
+
+            <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20 flex items-center gap-4">
+              <div className="text-center">
+                <p className="text-[10px] uppercase font-bold text-indigo-200 mb-0.5">진행률</p>
+                <p className="text-lg font-black">{currentDrawn.length} / {gameState.numWinners || 5}</p>
+              </div>
+              <div className="w-px h-6 bg-white/20" />
+              <div className="text-center">
+                <p className="text-[10px] uppercase font-bold text-indigo-200 mb-0.5">남은 번호</p>
+                <p className="text-lg font-black">{(gameState.numWinners || 5) - currentDrawn.length}개</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1982,7 +2012,7 @@ function StudentRealTimeView({ studentName, myEntries, gameState }: {
               className={cn(
                 "w-12 h-12 rounded-xl flex items-center justify-center text-sm font-black transition-all duration-500 border-2",
                 currentDrawn[i] 
-                  ? "bg-white text-indigo-600 border-white shadow-lg" 
+                  ? "bg-white text-indigo-600 border-white shadow-lg font-bold" 
                   : "bg-indigo-700/50 text-indigo-400 border-indigo-500/30"
               )}
             >
@@ -2001,12 +2031,12 @@ function StudentRealTimeView({ studentName, myEntries, gameState }: {
           
           <div className="space-y-4">
             {myEntries.map((entry, idx) => {
-              const matchedPicks = entry.picks.filter(p => currentDrawn.includes(p));
+              const matchedPicks = entry.picks.filter(p => currentDrawn.some(d => isItemMatched(d, p)));
               const matchCount = matchedPicks.length;
               
               return (
                 <motion.div 
-                  key={entry.timestamp}
+                  key={entry.timestamp || idx}
                   initial={{ x: -20, opacity: 0 }}
                   animate={{ x: 0, opacity: 1 }}
                   transition={{ delay: idx * 0.1 }}
@@ -2019,7 +2049,7 @@ function StudentRealTimeView({ studentName, myEntries, gameState }: {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {entry.picks.map((pick, pIdx) => {
-                        const isMatch = currentDrawn.includes(pick);
+                        const isMatch = currentDrawn.some(d => isItemMatched(d, pick));
                         return (
                           <span 
                             key={pIdx}
@@ -2170,7 +2200,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
     let counter = 0;
     const maxCounter = effect === 'slot' ? 40 : (effect === 'box' ? 35 : 25);
     intervalRef.current = setInterval(() => {
-      const remaining = students.filter(s => !drawn.includes(s.name));
+      const remaining = students.filter(s => !drawn.some(d => isItemMatched(d, s.name)));
       const random = remaining[Math.floor(Math.random() * remaining.length)];
       setCurrentCandidate(random.name);
       
@@ -2202,7 +2232,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
 
         // Show the name for 2 seconds before adding to drawn list
         setTimeout(() => {
-          const newDrawn = [...drawn, final.name];
+          const newDrawn = [...drawn.filter(d => !isItemMatched(d, final.name)), final.name];
           setDrawn(newDrawn);
           
           // Update Firestore for real-time student feedback
@@ -2358,12 +2388,14 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                 numWinners={gameState.numWinners || 5}
                 primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
                 onWinnerDetermined={(winnerName, rank) => {
-                  const newDrawn = [...drawn, winnerName];
-                  setDrawn(newDrawn);
-                  setDoc(doc(db, 'gameState', adminEmail), {
-                    ...gameState,
-                    currentDrawn: newDrawn
-                  }, { merge: true });
+                  setDrawn(prev => {
+                    const newDrawn = [...prev.filter(n => !isItemMatched(n, winnerName)), winnerName];
+                    setDoc(doc(db, 'gameState', adminEmail), {
+                      ...gameState,
+                      currentDrawn: newDrawn
+                    }, { merge: true });
+                    return newDrawn;
+                  });
                 }}
                 onRaceFinished={async (finalWinners) => {
                   setDrawn(finalWinners);
