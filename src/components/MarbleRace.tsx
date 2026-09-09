@@ -161,6 +161,7 @@ interface MarbleRaceProps {
   students: Student[];
   numWinners: number;
   primaryColor?: string;
+  initialMapTheme?: MapTheme;
   onWinnerDetermined: (winnerName: string, rank: number) => void;
   onRaceFinished: (winners: string[]) => void;
 }
@@ -180,6 +181,7 @@ export default function MarbleRace({
   students,
   numWinners,
   primaryColor = '#fbbf24',
+  initialMapTheme = 'cosmic',
   onWinnerDetermined,
   onRaceFinished,
 }: MarbleRaceProps) {
@@ -194,7 +196,7 @@ export default function MarbleRace({
   const [bombAlert, setBombAlert] = useState<string | null>(null);
   const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
   const [finishCountdown, setFinishCountdown] = useState<number>(30);
-  const [mapTheme, setMapTheme] = useState<MapTheme>('cosmic');
+  const [mapTheme, setMapTheme] = useState<MapTheme>(initialMapTheme);
   
   const marblesRef = useRef<Marble[]>([]);
   const pegsRef = useRef<Peg[]>([]);
@@ -517,11 +519,13 @@ export default function MarbleRace({
     setWinners([]);
   };
 
-  // Initialize on mount or when students change
+  // Initialize on mount or when students / initialMapTheme change
   useEffect(() => {
-    initTrack();
+    const targetTheme = initialMapTheme || mapTheme;
+    setMapTheme(targetTheme);
+    initTrack(targetTheme);
     initMarbles();
-  }, [students]);
+  }, [students, initialMapTheme]);
 
   // Start Race countdown
   const startCountdown = async () => {
@@ -560,7 +564,7 @@ export default function MarbleRace({
   // Reset Race
   const resetRace = () => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    initTrack();
+    initTrack(mapTheme);
     initMarbles();
     shockwavesRef.current = [];
     particlesRef.current = [];

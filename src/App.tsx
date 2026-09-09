@@ -58,7 +58,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
 import soundEngine from './soundEngine';
-import MarbleRace from './components/MarbleRace';
+import MarbleRace, { MAP_THEMES, MapTheme } from './components/MarbleRace';
 import SlotMachineEffect from './components/effects/SlotMachineEffect';
 import SupernovaExplosionEffect from './components/effects/SupernovaExplosionEffect';
 import MythicCardEffect from './components/effects/MythicCardEffect';
@@ -101,6 +101,7 @@ interface GameState {
   numWinners: number;
   prizeCriteria: PrizeCriteria[];
   drawEffect?: 'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble';
+  marbleMapTheme?: MapTheme;
   currentDrawn?: string[];
   theme?: {
     primaryColor: string;
@@ -724,6 +725,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
   const [showQr, setShowQr] = useState(false);
   const [numWinners, setNumWinners] = useState(gameState?.numWinners || 5);
   const [drawEffect, setDrawEffect] = useState<'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble'>(gameState?.drawEffect || 'board');
+  const [marbleMapTheme, setMarbleMapTheme] = useState<MapTheme>(gameState?.marbleMapTheme || 'cosmic');
   const [primaryColor, setPrimaryColor] = useState(gameState?.theme?.primaryColor || '#f59e0b');
   const [backgroundColor, setBackgroundColor] = useState(gameState?.theme?.backgroundColor || '#0f172a');
   const [schoolLogoUrl, setSchoolLogoUrl] = useState(gameState?.theme?.schoolLogoUrl || '');
@@ -752,6 +754,9 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     if (gameState) {
       setNumWinners(gameState.numWinners || 5);
       setDrawEffect(gameState.drawEffect || 'standard');
+      if (gameState.marbleMapTheme) {
+        setMarbleMapTheme(gameState.marbleMapTheme);
+      }
       if (gameState.prizeCriteria) {
         setPrizeCriteria(gameState.prizeCriteria);
       }
@@ -770,6 +775,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       ...gameState,
       numWinners,
       drawEffect,
+      marbleMapTheme,
       prizeCriteria,
       theme: {
         primaryColor,
@@ -1448,29 +1454,26 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                         </button>
                       </div>
 
-                      {/* Card Body: Ticket Stepper with label on top */}
-                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-1.5 flex flex-col items-center justify-center gap-1">
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
-                          <Ticket className="w-3 h-3 text-indigo-500 shrink-0" />
-                          <span className="whitespace-nowrap">응모권</span>
+                      {/* Card Body: Sleek Horizontal Ticket Stepper */}
+                      <div className="bg-slate-50 border border-slate-200/80 rounded-xl p-1.5 flex items-center justify-between gap-1 w-full select-none">
+                        <button 
+                          onClick={() => updateTickets(s.id, (s.tickets || 1) - 1)} 
+                          className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs shrink-0 active:scale-95"
+                          title="응모권 1장 차감"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="flex items-center justify-center gap-1 font-black text-indigo-600 text-xs whitespace-nowrap px-1">
+                          <Ticket className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
+                          <span>{s.tickets || 1}장</span>
                         </div>
-                        <div className="flex items-center justify-center gap-2 w-full">
-                          <button 
-                            onClick={() => updateTickets(s.id, (s.tickets || 1) - 1)} 
-                            className="w-6 h-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="text-sm font-black text-indigo-600 tabular-nums px-1 min-w-[20px] text-center">
-                            {s.tickets || 1}
-                          </span>
-                          <button 
-                            onClick={() => updateTickets(s.id, (s.tickets || 1) + 1)} 
-                            className="w-6 h-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
+                        <button 
+                          onClick={() => updateTickets(s.id, (s.tickets || 1) + 1)} 
+                          className="w-7 h-7 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs shrink-0 active:scale-95"
+                          title="응모권 1장 추가"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                       
                       {/* Card Footer: Cumulative Stats (if exists) */}
@@ -1580,6 +1583,82 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                       </div>
                     </div>
                   </div>
+
+                  {/* Marble Race Map Theme Selector (Active when marble effect selected) */}
+                  {drawEffect === 'marble' && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-5 sm:p-6 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 rounded-3xl border-2 border-indigo-500/40 shadow-xl"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0">
+                            <Sparkles className="w-5 h-5 fill-current" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                              구슬 레이스 테마 맵 선택
+                              <span className="text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
+                                4가지 전용 기믹
+                              </span>
+                            </h4>
+                            <p className="text-xs text-slate-400">
+                              추첨 시 기본 적용될 레이스 트랙과 특수 방해 기믹을 선택합니다.
+                            </p>
+                          </div>
+                        </div>
+                        <span className="text-xs font-black text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full border border-amber-400/30">
+                          선택됨: {MAP_THEMES.find(t => t.id === marbleMapTheme)?.name}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                        {MAP_THEMES.map((theme) => {
+                          const isSelected = marbleMapTheme === theme.id;
+                          return (
+                            <button
+                              key={theme.id}
+                              type="button"
+                              onClick={() => {
+                                setMarbleMapTheme(theme.id);
+                                soundEngine.unlockAudio().then(() => {
+                                  soundEngine.playMarbleBounce(0.5);
+                                });
+                              }}
+                              className={cn(
+                                "relative p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between gap-3 group",
+                                isSelected
+                                  ? "bg-white/10 border-amber-400 shadow-lg shadow-amber-400/20 scale-[1.02]"
+                                  : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
+                              )}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-2xl sm:text-3xl p-1 bg-white/5 rounded-xl border border-white/10">{theme.icon}</span>
+                                {isSelected ? (
+                                  <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shadow-xs">
+                                    기본 맵 적용
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300">
+                                    클릭하여 선택
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                <h5 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
+                                  {theme.name}
+                                </h5>
+                                <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 leading-relaxed">
+                                  {theme.desc}
+                                </p>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
 
                 <div>
@@ -2494,6 +2573,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                 students={students}
                 numWinners={gameState.numWinners || 5}
                 primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+                initialMapTheme={gameState?.marbleMapTheme || 'cosmic'}
                 onWinnerDetermined={(winnerName, rank) => {
                   setDrawn(prev => {
                     const newDrawn = [...prev.filter(n => !isItemMatched(n, winnerName)), winnerName];
