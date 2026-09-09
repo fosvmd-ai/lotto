@@ -1448,25 +1448,25 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                         </button>
                       </div>
 
-                      {/* Card Body: Compact Ticket Stepper */}
-                      <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-2 py-1">
-                        <div className="flex items-center gap-1 text-[11px] font-bold text-slate-500">
-                          <Ticket className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>응모권</span>
+                      {/* Card Body: Ticket Stepper with label on top */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-1.5 flex flex-col items-center justify-center gap-1">
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-slate-400">
+                          <Ticket className="w-3 h-3 text-indigo-500 shrink-0" />
+                          <span className="whitespace-nowrap">응모권</span>
                         </div>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center justify-center gap-2 w-full">
                           <button 
                             onClick={() => updateTickets(s.id, (s.tickets || 1) - 1)} 
-                            className="w-5 h-5 bg-white border border-slate-200 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
+                            className="w-6 h-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
                           >
                             <Minus className="w-3 h-3" />
                           </button>
-                          <span className="text-xs font-black text-indigo-600 tabular-nums w-5 text-center">
+                          <span className="text-sm font-black text-indigo-600 tabular-nums px-1 min-w-[20px] text-center">
                             {s.tickets || 1}
                           </span>
                           <button 
                             onClick={() => updateTickets(s.id, (s.tickets || 1) + 1)} 
-                            className="w-5 h-5 bg-white border border-slate-200 rounded-md flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
+                            className="w-6 h-6 bg-white border border-slate-200 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 hover:text-indigo-600 transition-colors shadow-2xs"
                           >
                             <Plus className="w-3 h-3" />
                           </button>
