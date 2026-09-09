@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import confetti from 'canvas-confetti';
-import { Trophy, Play, RotateCcw, Sparkles, Volume2, Flag, Bomb, Flame, Hourglass, ShieldAlert } from 'lucide-react';
+import { Trophy, Play, RotateCcw, Sparkles, Volume2, Flag, Bomb, Flame, Hourglass, ShieldAlert, Orbit, Zap, Snowflake, Cog } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import soundEngine from '../soundEngine';
@@ -8,6 +8,52 @@ import soundEngine from '../soundEngine';
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+export type MapTheme = 'cosmic' | 'pinball' | 'glacier' | 'factory';
+
+export interface MapThemeInfo {
+  id: MapTheme;
+  name: string;
+  icon: string;
+  desc: string;
+  activeClasses: string;
+  badgeColor: string;
+}
+
+export const MAP_THEMES: MapThemeInfo[] = [
+  {
+    id: 'cosmic',
+    name: '우주 블랙홀',
+    icon: '🌌',
+    desc: '하단 블랙홀로 빨려 들어가면 상단으로 역류 워프!',
+    activeClasses: 'bg-purple-600 text-white border-purple-400 shadow-lg shadow-purple-900/40',
+    badgeColor: '#8b5cf6'
+  },
+  {
+    id: 'pinball',
+    name: '네온 핀볼',
+    icon: '⚡',
+    desc: '사방에서 튀어오르는 초탄성 메가 범퍼 카오스!',
+    activeClasses: 'bg-pink-600 text-white border-pink-400 shadow-lg shadow-pink-900/40',
+    badgeColor: '#ec4899'
+  },
+  {
+    id: 'glacier',
+    name: '빙하 협곡',
+    icon: '❄️',
+    desc: '미끄러운 저마찰 얼음 바닥과 거대한 스윙 해머추!',
+    activeClasses: 'bg-cyan-600 text-white border-cyan-400 shadow-lg shadow-cyan-900/40',
+    badgeColor: '#06b6d4'
+  },
+  {
+    id: 'factory',
+    name: '메카닉 팩토리',
+    icon: '⚙️',
+    desc: '맞물려 회전하는 연쇄 기어와 가속 컨베이어!',
+    activeClasses: 'bg-amber-600 text-white border-amber-400 shadow-lg shadow-amber-900/40',
+    badgeColor: '#f59e0b'
+  }
+];
 
 interface Student {
   id: string;
@@ -148,6 +194,7 @@ export default function MarbleRace({
   const [bombAlert, setBombAlert] = useState<string | null>(null);
   const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
   const [finishCountdown, setFinishCountdown] = useState<number>(30);
+  const [mapTheme, setMapTheme] = useState<MapTheme>('cosmic');
   
   const marblesRef = useRef<Marble[]>([]);
   const pegsRef = useRef<Peg[]>([]);
@@ -181,109 +228,250 @@ export default function MarbleRace({
     }
   };
 
-  // Build Obstacle Track
-  const initTrack = () => {
+  // Build Obstacle Track based on selected theme
+  const initTrack = (theme: MapTheme = mapTheme) => {
     const pegs: Peg[] = [];
     const bumpers: Bumper[] = [];
     const ramps: Ramp[] = [];
     const spinners: Spinner[] = [];
+    const speedPads: SpeedPad[] = [];
+    const wormholes: Wormhole[] = [];
+    const pendulums: Pendulum[] = [];
 
-    // --- Section 1: Top Peg Field (y: 350 to 950) ---
-    const pegRows = 8;
-    for (let r = 0; r < pegRows; r++) {
-      const y = 380 + r * 70;
-      const isOdd = r % 2 === 1;
-      const cols = isOdd ? 9 : 10;
-      const spacing = TRACK_WIDTH / cols;
-      for (let c = 1; c < cols; c++) {
-        const x = c * spacing + (isOdd ? spacing / 2 : 0) - (isOdd ? spacing / 4 : 0);
-        if (x > 50 && x < TRACK_WIDTH - 50) {
-          pegs.push({ x, y, radius: 7 });
-        }
-      }
-    }
-
-    // --- Section 2: Zig-zag Ramps & Central Bumpers (y: 1050 to 1800) ---
-    ramps.push({ x1: 0, y1: 1100, x2: 480, y2: 1250 });
-    ramps.push({ x1: TRACK_WIDTH, y1: 1350, x2: 220, y2: 1500 });
-    ramps.push({ x1: 0, y1: 1600, x2: 480, y2: 1750 });
-
-    // Bumpers on ramps
-    bumpers.push({ x: 550, y: 1200, radius: 32, pulse: 0 });
-    bumpers.push({ x: 150, y: 1450, radius: 32, pulse: 0 });
-    bumpers.push({ x: 550, y: 1700, radius: 32, pulse: 0 });
-
-    // --- Section 3: Rotating Obstacles (Spinners) (y: 1900 to 2400) ---
-    spinners.push({ x: 220, y: 1980, length: 110, angle: 0, speed: 0.04 });
-    spinners.push({ x: 480, y: 1980, length: 110, angle: Math.PI / 2, speed: -0.04 });
-    spinners.push({ x: 350, y: 2220, length: 140, angle: 0, speed: 0.035 });
-
-    // Side deflector ramps
-    ramps.push({ x1: 0, y1: 2100, x2: 120, y2: 2160 });
-    ramps.push({ x1: TRACK_WIDTH, y1: 2100, x2: TRACK_WIDTH - 120, y2: 2160 });
-
-    // --- Section 4: Dense Pinball Chaos Zone (y: 2450 to 3100) ---
-    for (let r = 0; r < 9; r++) {
-      const y = 2500 + r * 65;
-      const isOdd = r % 2 === 1;
-      const cols = isOdd ? 8 : 9;
-      const spacing = TRACK_WIDTH / cols;
-      for (let c = 1; c < cols; c++) {
-        const x = c * spacing + (isOdd ? spacing / 2 : 0) - (isOdd ? spacing / 4 : 0);
-        if (x > 60 && x < TRACK_WIDTH - 60) {
-          pegs.push({ x, y, radius: 8 });
-        }
-      }
-    }
-    // High-bounce center bumper
-    bumpers.push({ x: 350, y: 2800, radius: 45, pulse: 0 });
-    bumpers.push({ x: 160, y: 2650, radius: 25, pulse: 0 });
-    bumpers.push({ x: 540, y: 2650, radius: 25, pulse: 0 });
-
-    // --- Section 5: Funnel Bottleneck & Rotating Barrier leading into Finish Line (y: 3080 to FINISH_Y) ---
+    // --- Common Finale: Funnel Bottleneck & Rotating Gate Barrier (y: 3080 to FINISH_Y) ---
     const ALLEY_L = 305;
     const ALLEY_R = 395;
     const ALLEY_TOP = 3200;
 
-    // 1. Funnel Diagonal Convergence Walls (수렴하는 깔때기 사선 벽)
+    // 1. Funnel Convergence Walls
     ramps.push({ x1: 20, y1: 3080, x2: ALLEY_L, y2: ALLEY_TOP });
     ramps.push({ x1: TRACK_WIDTH - 20, y1: 3080, x2: ALLEY_R, y2: ALLEY_TOP });
 
-    // 2. Narrow Alley Straight Walls (좁은 골목 양쪽 벽)
+    // 2. Narrow Alley Walls
     ramps.push({ x1: ALLEY_L, y1: ALLEY_TOP, x2: ALLEY_L, y2: FINISH_Y + 50 });
     ramps.push({ x1: ALLEY_R, y1: ALLEY_TOP, x2: ALLEY_R, y2: FINISH_Y + 50 });
 
-    // 3. Rotating Gate Barrier Bar on Alley Entrance (골목 입구에서 시계 반대방향 360도 회전)
-    // Left anchor at (305, 3195), length 78px (골목 폭 90px 중 78px 차단, 오른쪽 벽을 파고들지 않음!)
+    // 3. Rotating Gate Barrier Bar on Alley Entrance (시계 반대방향 360도 회전)
     spinners.push({
       x: ALLEY_L,
       y: ALLEY_TOP - 5,
       length: 78,
       angle: 0,
-      speed: -0.046, // 시계 반대방향 회전!
+      speed: -0.046,
       anchorType: 'edge',
-      color: '#f59e0b'
+      color: theme === 'cosmic' ? '#a855f7' : theme === 'pinball' ? '#ec4899' : theme === 'glacier' ? '#06b6d4' : '#f59e0b'
     });
 
-    // --- Dynamic Reversal Gimmick 1: Speed Boost Pads ---
-    const speedPads: SpeedPad[] = [
-      { x: 250, y: 850, width: 200, height: 32, boostY: 16 },
-      { x: 100, y: 1580, width: 160, height: 30, boostY: 15, boostX: 4 },
-      { x: 440, y: 1580, width: 160, height: 30, boostY: 15, boostX: -4 },
-      { x: 270, y: 2880, width: 160, height: 32, boostY: 17 }
-    ];
+    if (theme === 'cosmic') {
+      // ==========================================
+      // 🌌 MAP 1: 우주 블랙홀 & 웜홀 맵 (COSMIC)
+      // ==========================================
+      // Stellar constellation peg field
+      for (let r = 0; r < 7; r++) {
+        const y = 380 + r * 75;
+        const isOdd = r % 2 === 1;
+        const cols = isOdd ? 8 : 9;
+        const spacing = TRACK_WIDTH / cols;
+        for (let c = 1; c < cols; c++) {
+          const x = c * spacing + (isOdd ? spacing / 2 : 0);
+          if (x > 60 && x < TRACK_WIDTH - 60) {
+            pegs.push({ x, y, radius: 7 });
+          }
+        }
+      }
 
-    // --- Dynamic Reversal Gimmick 2: Cosmic Warp Wormholes ---
-    const wormholes: Wormhole[] = [
-      { id: 'wh1', inX: 90, inY: 1320, outX: 520, outY: 1720, radius: 24, color: '#a855f7', pulse: 0 },
-      { id: 'wh2', inX: 610, inY: 2060, outX: 150, outY: 2420, radius: 24, color: '#06b6d4', pulse: 0 }
-    ];
+      // Gravitational curved ramps
+      ramps.push({ x1: 20, y1: 1050, x2: 450, y2: 1200 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1350, x2: 250, y2: 1500 });
+      ramps.push({ x1: 20, y1: 1650, x2: 450, y2: 1800 });
 
-    // --- Dynamic Reversal Gimmick 3: Giant Swinging Pendulums ---
-    const pendulums: Pendulum[] = [
-      { anchorX: 350, anchorY: 1820, length: 150, bobRadius: 26, angle: -0.9, speed: 0.045, maxAngle: 1.1 },
-      { anchorX: 350, anchorY: 3020, length: 130, bobRadius: 24, angle: 0.8, speed: -0.05, maxAngle: 1.0 }
-    ];
+      // Gravity Node Bumpers
+      bumpers.push({ x: 550, y: 1150, radius: 36, pulse: 0 });
+      bumpers.push({ x: 150, y: 1450, radius: 36, pulse: 0 });
+      bumpers.push({ x: 550, y: 1750, radius: 36, pulse: 0 });
+      bumpers.push({ x: 350, y: 2650, radius: 42, pulse: 0 });
+
+      // Galaxy Spinners
+      spinners.push({ x: 350, y: 1350, length: 135, angle: 0, speed: 0.04, color: '#a855f7' });
+      spinners.push({ x: 200, y: 2050, length: 115, angle: Math.PI / 4, speed: -0.045, color: '#06b6d4' });
+      spinners.push({ x: 500, y: 2050, length: 115, angle: -Math.PI / 4, speed: 0.045, color: '#06b6d4' });
+      spinners.push({ x: 350, y: 2450, length: 140, angle: 0, speed: 0.035, color: '#a855f7' });
+
+      // 🌀 3 Active Cosmic Wormholes (Black Hole In -> White Hole Out Upward / Cross Warps)
+      // WH1: In at y:1550 -> Out at y:650 (상단 대역류 워프!)
+      wormholes.push({ id: 'wh1', inX: 95, inY: 1550, outX: 580, outY: 650, radius: 26, color: '#a855f7', pulse: 0 });
+      // WH2: In at y:2300 -> Out at y:1150 (중상단 역류 워프!)
+      wormholes.push({ id: 'wh2', inX: 605, inY: 2300, outX: 140, outY: 1150, radius: 26, color: '#06b6d4', pulse: 0 });
+      // WH3: In at y:2920 -> Out at y:1850 (결승선 직전 상단 역류 워프!)
+      wormholes.push({ id: 'wh3', inX: 120, inY: 2920, outX: 580, outY: 1850, radius: 26, color: '#ec4899', pulse: 0 });
+
+      // Anti-Gravity Booster Pads
+      speedPads.push({ x: 250, y: 900, width: 200, height: 32, boostY: 16 });
+      speedPads.push({ x: 100, y: 1780, width: 160, height: 30, boostY: 15, boostX: 4 });
+      speedPads.push({ x: 440, y: 1780, width: 160, height: 30, boostY: 15, boostX: -4 });
+      speedPads.push({ x: 270, y: 2780, width: 160, height: 32, boostY: 18 });
+
+      // Cosmic Satellite Pendulum
+      pendulums.push({ anchorX: 350, anchorY: 1950, length: 140, bobRadius: 26, angle: -0.9, speed: 0.045, maxAngle: 1.1 });
+
+    } else if (theme === 'pinball') {
+      // ==========================================
+      // ⚡ MAP 2: 네온 핀볼 & 메가 범퍼 맵 (PINBALL)
+      // ==========================================
+      // Dense Top Plinko Field
+      for (let r = 0; r < 8; r++) {
+        const y = 370 + r * 65;
+        const isOdd = r % 2 === 1;
+        const cols = isOdd ? 9 : 10;
+        const spacing = TRACK_WIDTH / cols;
+        for (let c = 1; c < cols; c++) {
+          const x = c * spacing + (isOdd ? spacing / 2 : 0);
+          if (x > 50 && x < TRACK_WIDTH - 50) {
+            pegs.push({ x, y, radius: 7 });
+          }
+        }
+      }
+
+      // 9 Mega Bouncy Bumpers
+      bumpers.push({ x: 350, y: 950, radius: 48, pulse: 0 });
+      bumpers.push({ x: 170, y: 1250, radius: 40, pulse: 0 });
+      bumpers.push({ x: 530, y: 1250, radius: 40, pulse: 0 });
+      bumpers.push({ x: 350, y: 1550, radius: 52, pulse: 0 });
+      bumpers.push({ x: 180, y: 1900, radius: 42, pulse: 0 });
+      bumpers.push({ x: 520, y: 1900, radius: 42, pulse: 0 });
+      bumpers.push({ x: 350, y: 2250, radius: 48, pulse: 0 });
+      bumpers.push({ x: 160, y: 2700, radius: 36, pulse: 0 });
+      bumpers.push({ x: 540, y: 2700, radius: 36, pulse: 0 });
+
+      // Fast Cyber Flipper Spinners
+      spinners.push({ x: 180, y: 1400, length: 115, angle: 0, speed: 0.065, color: '#ec4899' });
+      spinners.push({ x: 520, y: 1400, length: 115, angle: Math.PI, speed: -0.065, color: '#ec4899' });
+      spinners.push({ x: 220, y: 2050, length: 120, angle: Math.PI / 4, speed: -0.06, color: '#facc15' });
+      spinners.push({ x: 480, y: 2050, length: 120, angle: -Math.PI / 4, speed: 0.06, color: '#facc15' });
+
+      // High-angle pinball deflector ramps
+      ramps.push({ x1: 20, y1: 1100, x2: 150, y2: 1180 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1100, x2: TRACK_WIDTH - 150, y2: 1180 });
+      ramps.push({ x1: 20, y1: 1750, x2: 150, y2: 1830 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1750, x2: TRACK_WIDTH - 150, y2: 1830 });
+      ramps.push({ x1: 0, y1: 2400, x2: 460, y2: 2550 });
+      ramps.push({ x1: TRACK_WIDTH, y1: 2600, x2: 240, y2: 2750 });
+
+      // Dense Bottom Peg Cluster
+      for (let r = 0; r < 5; r++) {
+        const y = 2850 + r * 45;
+        const isOdd = r % 2 === 1;
+        const cols = isOdd ? 8 : 9;
+        const spacing = TRACK_WIDTH / cols;
+        for (let c = 1; c < cols; c++) {
+          const x = c * spacing + (isOdd ? spacing / 2 : 0);
+          if (x > 80 && x < TRACK_WIDTH - 80) {
+            pegs.push({ x, y, radius: 7 });
+          }
+        }
+      }
+
+      // Turbo Speed Boosters
+      speedPads.push({ x: 260, y: 1050, width: 180, height: 30, boostY: 17 });
+      speedPads.push({ x: 100, y: 1650, width: 160, height: 30, boostY: 16, boostX: 5 });
+      speedPads.push({ x: 440, y: 1650, width: 160, height: 30, boostY: 16, boostX: -5 });
+      speedPads.push({ x: 260, y: 2350, width: 180, height: 30, boostY: 18 });
+
+      // Pinball Bonus Warp Loop
+      wormholes.push({ id: 'wh_pb', inX: 80, inY: 2580, outX: 520, outY: 1700, radius: 25, color: '#ec4899', pulse: 0 });
+
+    } else if (theme === 'glacier') {
+      // ==========================================
+      // ❄️ MAP 3: 빙하 협곡 & 스윙 해머추 맵 (GLACIER)
+      // ==========================================
+      // Icicle cluster pegs
+      for (let r = 0; r < 5; r++) {
+        const y = 380 + r * 70;
+        const isOdd = r % 2 === 1;
+        const cols = isOdd ? 7 : 8;
+        const spacing = TRACK_WIDTH / cols;
+        for (let c = 1; c < cols; c++) {
+          const x = c * spacing + (isOdd ? spacing / 2 : 0);
+          if (x > 80 && x < TRACK_WIDTH - 80) {
+            pegs.push({ x, y, radius: 8 });
+          }
+        }
+      }
+
+      // 3 Giant Ice Swinging Hammers (Pendulums)
+      pendulums.push({ anchorX: 350, anchorY: 1050, length: 160, bobRadius: 32, angle: -1.1, speed: 0.048, maxAngle: 1.25 });
+      pendulums.push({ anchorX: 350, anchorY: 1750, length: 175, bobRadius: 34, angle: 1.0, speed: -0.052, maxAngle: 1.3 });
+      pendulums.push({ anchorX: 350, anchorY: 2550, length: 165, bobRadius: 32, angle: -0.9, speed: 0.05, maxAngle: 1.2 });
+
+      // Steep Ice Slides (Ramps)
+      ramps.push({ x1: 20, y1: 850, x2: 480, y2: 1000 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1250, x2: 220, y2: 1400 });
+      ramps.push({ x1: 20, y1: 1550, x2: 480, y2: 1700 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1950, x2: 220, y2: 2100 });
+      ramps.push({ x1: 20, y1: 2350, x2: 480, y2: 2500 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 2750, x2: 220, y2: 2900 });
+
+      // Frozen Ice Bumpers at turnarounds
+      bumpers.push({ x: 560, y: 950, radius: 32, pulse: 0 });
+      bumpers.push({ x: 140, y: 1350, radius: 32, pulse: 0 });
+      bumpers.push({ x: 560, y: 1650, radius: 32, pulse: 0 });
+      bumpers.push({ x: 140, y: 2050, radius: 32, pulse: 0 });
+      bumpers.push({ x: 560, y: 2450, radius: 32, pulse: 0 });
+
+      // Ice Propeller Spinners
+      spinners.push({ x: 230, y: 1480, length: 110, angle: 0, speed: 0.04, color: '#38bdf8' });
+      spinners.push({ x: 470, y: 2180, length: 110, angle: Math.PI / 2, speed: -0.04, color: '#38bdf8' });
+
+      // Frost Slide Boosters
+      speedPads.push({ x: 250, y: 780, width: 200, height: 30, boostY: 17 });
+      speedPads.push({ x: 120, y: 2150, width: 160, height: 30, boostY: 16, boostX: 5 });
+      speedPads.push({ x: 260, y: 2950, width: 180, height: 32, boostY: 18 });
+
+      // Glacier Crevasse Warp
+      wormholes.push({ id: 'wh_gl', inX: 90, inY: 2400, outX: 560, outY: 1550, radius: 25, color: '#38bdf8', pulse: 0 });
+
+    } else if (theme === 'factory') {
+      // ==========================================
+      // ⚙️ MAP 4: 메카닉 팩토리 & 기어 러시 맵 (FACTORY)
+      // ==========================================
+      // Industrial Gear Spinners
+      // Pair 1 (Dual interlocking gear)
+      spinners.push({ x: 250, y: 1150, length: 125, angle: 0, speed: 0.045, color: '#f59e0b' });
+      spinners.push({ x: 450, y: 1150, length: 125, angle: Math.PI / 2, speed: -0.045, color: '#f59e0b' });
+
+      // Triple gear row at y: 1850
+      spinners.push({ x: 180, y: 1850, length: 110, angle: 0, speed: 0.042, color: '#eab308' });
+      spinners.push({ x: 350, y: 1850, length: 130, angle: Math.PI / 3, speed: -0.048, color: '#f97316' });
+      spinners.push({ x: 520, y: 1850, length: 110, angle: 0, speed: 0.042, color: '#eab308' });
+
+      // Heavy Industrial Rotor at y: 2600
+      spinners.push({ x: 350, y: 2600, length: 160, angle: 0, speed: 0.038, color: '#ef4444' });
+
+      // Directional Conveyor Speed Pads
+      speedPads.push({ x: 100, y: 850, width: 220, height: 32, boostY: 15, boostX: 5 });
+      speedPads.push({ x: 380, y: 1450, width: 220, height: 32, boostY: 15, boostX: -5 });
+      speedPads.push({ x: 100, y: 2200, width: 220, height: 32, boostY: 15, boostX: 6 });
+      speedPads.push({ x: 250, y: 2820, width: 200, height: 32, boostY: 18 });
+
+      // Industrial Wrecking Ball Pendulum
+      pendulums.push({ anchorX: 350, anchorY: 1500, length: 150, bobRadius: 30, angle: -0.9, speed: 0.048, maxAngle: 1.15 });
+
+      // Factory Metal Chutes
+      ramps.push({ x1: 20, y1: 1000, x2: 450, y2: 1120 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1300, x2: 250, y2: 1420 });
+      ramps.push({ x1: 20, y1: 1680, x2: 450, y2: 1800 });
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 2050, x2: 250, y2: 2170 });
+      ramps.push({ x1: 20, y1: 2420, x2: 450, y2: 2540 });
+
+      // Hydraulic Piston Bumpers
+      bumpers.push({ x: 540, y: 1060, radius: 36, pulse: 0 });
+      bumpers.push({ x: 160, y: 1360, radius: 36, pulse: 0 });
+      bumpers.push({ x: 540, y: 1740, radius: 36, pulse: 0 });
+      bumpers.push({ x: 160, y: 2110, radius: 36, pulse: 0 });
+
+      // Factory Ventilation Shaft Warp
+      wormholes.push({ id: 'wh_fc', inX: 95, inY: 2350, outX: 570, outY: 950, radius: 26, color: '#f59e0b', pulse: 0 });
+    }
 
     pegsRef.current = pegs;
     bumpersRef.current = bumpers;
@@ -423,9 +611,9 @@ export default function MarbleRace({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const gravity = 0.23;
-    const friction = 0.985;
-    const wallElasticity = 0.7;
+    const gravity = mapTheme === 'cosmic' ? 0.21 : (mapTheme === 'glacier' ? 0.24 : 0.23);
+    const friction = mapTheme === 'glacier' ? 0.992 : (mapTheme === 'cosmic' ? 0.987 : 0.985);
+    const wallElasticity = mapTheme === 'pinball' ? 0.85 : 0.7;
 
     const loop = () => {
       // 0. Slow-mo timer & timeScale
@@ -754,23 +942,31 @@ export default function MarbleRace({
           const dx = m.x - wh.inX;
           const dy = m.y - wh.inY;
           if (Math.hypot(dx, dy) < wh.radius + m.radius) {
+            const isUpwardWarp = wh.outY < wh.inY;
             m.x = wh.outX + (Math.random() - 0.5) * 16;
-            m.y = wh.outY + 25;
-            m.vy = Math.max(m.vy, 9);
+            m.y = isUpwardWarp ? wh.outY - 10 : wh.outY + 25;
+            m.vy = isUpwardWarp ? 3.5 : Math.max(m.vy, 9);
+            m.vx = (Math.random() - 0.5) * 6;
             wh.pulse = 1;
             soundEngine.playWarpSound();
+            
             // Spawn portal warp spark particles
-            for (let k = 0; k < 14; k++) {
+            for (let k = 0; k < 18; k++) {
               particlesRef.current.push({
                 x: wh.outX,
                 y: wh.outY,
-                vx: (Math.random() - 0.5) * 8,
-                vy: (Math.random() - 0.5) * 8,
-                size: 3.5,
+                vx: (Math.random() - 0.5) * 9,
+                vy: (Math.random() - 0.5) * 9,
+                size: 4,
                 color: wh.color,
                 alpha: 1,
-                life: 25
+                life: 28
               });
+            }
+
+            if (isUpwardWarp && raceState === 'racing') {
+              setBombAlert(`🌀 [${m.name}] 블랙홀에 빠져 상단으로 역류 워프!`);
+              setTimeout(() => setBombAlert(null), 1800);
             }
           }
         }
@@ -1047,28 +1243,87 @@ export default function MarbleRace({
       ctx.scale(currentZoom, currentZoom);
       ctx.translate(-leadX, -cameraY - viewCenterY);
 
-      // Track Background & Side Rails
-      ctx.fillStyle = '#0f172a';
+      // Track Background & Side Rails adapted to theme
+      const bgColors = {
+        cosmic: '#030712',
+        pinball: '#09090b',
+        glacier: '#082f49',
+        factory: '#18181b'
+      };
+      ctx.fillStyle = bgColors[mapTheme] || '#0f172a';
       ctx.fillRect(0, 0, TRACK_WIDTH, TRACK_HEIGHT);
 
-      // Grid background lines
-      ctx.strokeStyle = '#1e293b';
-      ctx.lineWidth = 1;
-      for (let y = 0; y < TRACK_HEIGHT; y += 80) {
-        ctx.beginPath();
-        ctx.moveTo(20, y);
-        ctx.lineTo(TRACK_WIDTH - 20, y);
-        ctx.stroke();
+      // Theme-specific Background Visuals
+      if (mapTheme === 'cosmic') {
+        // Twinkling Starfield in Deep Space
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+        for (let i = 0; i < 70; i++) {
+          const sx = (Math.sin(i * 123.45) * 0.5 + 0.5) * (TRACK_WIDTH - 60) + 30;
+          const sy = (i * 55 + ((Date.now() * 0.03) % 55)) % TRACK_HEIGHT;
+          const sr = (i % 4 === 0) ? 2.2 : (i % 2 === 0 ? 1.5 : 1);
+          ctx.beginPath();
+          ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      } else if (mapTheme === 'pinball') {
+        // Cyber Grid Pattern
+        ctx.strokeStyle = 'rgba(236, 72, 153, 0.14)';
+        ctx.lineWidth = 1.5;
+        for (let y = 0; y < TRACK_HEIGHT; y += 60) {
+          ctx.beginPath();
+          ctx.moveTo(20, y);
+          ctx.lineTo(TRACK_WIDTH - 20, y);
+          ctx.stroke();
+        }
+        for (let x = 60; x < TRACK_WIDTH - 20; x += 80) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, TRACK_HEIGHT);
+          ctx.stroke();
+        }
+      } else if (mapTheme === 'glacier') {
+        // Frosty Icicle Bands & Cold Glow
+        ctx.fillStyle = 'rgba(56, 189, 248, 0.06)';
+        for (let y = 0; y < TRACK_HEIGHT; y += 120) {
+          ctx.fillRect(20, y, TRACK_WIDTH - 40, 45);
+        }
+      } else if (mapTheme === 'factory') {
+        // Industrial Floor Plate Grid
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.1)';
+        ctx.lineWidth = 2;
+        for (let y = 0; y < TRACK_HEIGHT; y += 80) {
+          ctx.beginPath();
+          ctx.moveTo(20, y);
+          ctx.lineTo(TRACK_WIDTH - 20, y);
+          ctx.stroke();
+        }
       }
 
-      // Neon Side Rails
-      ctx.strokeStyle = '#334155';
-      ctx.lineWidth = 8;
+      // Neon Side Rails with Theme Glow
+      const railColors = {
+        cosmic: '#8b5cf6',
+        pinball: '#ec4899',
+        glacier: '#38bdf8',
+        factory: '#f97316'
+      };
+      const railGlowColors = {
+        cosmic: 'rgba(139, 92, 246, 0.35)',
+        pinball: 'rgba(236, 72, 153, 0.35)',
+        glacier: 'rgba(56, 189, 248, 0.35)',
+        factory: 'rgba(249, 115, 22, 0.35)'
+      };
+
+      ctx.strokeStyle = railColors[mapTheme] || '#334155';
+      ctx.lineWidth = 7;
       ctx.beginPath();
       ctx.moveTo(20, 0);
       ctx.lineTo(20, TRACK_HEIGHT);
       ctx.moveTo(TRACK_WIDTH - 20, 0);
       ctx.lineTo(TRACK_WIDTH - 20, TRACK_HEIGHT);
+      ctx.stroke();
+
+      ctx.strokeStyle = railGlowColors[mapTheme] || 'rgba(51, 65, 85, 0.3)';
+      ctx.lineWidth = 16;
       ctx.stroke();
 
       // Top Start Chamber Gate
@@ -1077,7 +1332,7 @@ export default function MarbleRace({
       ctx.fillStyle = primaryColor;
       ctx.font = 'bold 16px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('START CHAMBER', TRACK_WIDTH / 2, 40);
+      ctx.fillText(`START CHAMBER [${MAP_THEMES.find(t => t.id === mapTheme)?.name || 'TRACK'}]`, TRACK_WIDTH / 2, 40);
 
       // Draw Ramps
       ramps.forEach(ramp => {
@@ -1509,6 +1764,43 @@ export default function MarbleRace({
 
   return (
     <div className="w-full max-w-4xl flex flex-col items-center select-none relative">
+      {/* Map Theme Selector Bar (Available before race starts) */}
+      <div className="w-full bg-slate-900/80 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800/90 flex flex-wrap items-center justify-between gap-2.5 mb-3 shadow-xl z-20">
+        <div className="flex items-center gap-2 text-xs font-black text-slate-300">
+          <Sparkles className="w-4 h-4 text-amber-400" />
+          <span>테마 맵:</span>
+          <span className="text-[11px] font-medium text-slate-400 hidden sm:inline">
+            {MAP_THEMES.find(t => t.id === mapTheme)?.desc}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {MAP_THEMES.map(theme => (
+            <button
+              key={theme.id}
+              onClick={() => {
+                if (raceState === 'ready') {
+                  setMapTheme(theme.id);
+                  initTrack(theme.id);
+                  initMarbles();
+                }
+              }}
+              disabled={raceState !== 'ready'}
+              className={cn(
+                "px-3 py-1.5 rounded-xl text-xs font-black flex items-center gap-1.5 transition-all border shadow-sm",
+                mapTheme === theme.id
+                  ? theme.activeClasses
+                  : "bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200",
+                raceState !== 'ready' && "opacity-50 cursor-not-allowed"
+              )}
+              title={theme.desc}
+            >
+              <span>{theme.icon}</span>
+              <span>{theme.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Race Top HUD */}
       <div className="w-full bg-slate-900/90 backdrop-blur-md p-4 rounded-3xl border border-slate-800 flex items-center justify-between gap-4 mb-4 shadow-2xl z-20">
         {/* Left Title & Description (Fixed layout, no jitter) */}
