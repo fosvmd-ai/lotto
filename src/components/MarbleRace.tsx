@@ -49,7 +49,7 @@ export const MAP_THEMES: MapThemeInfo[] = [
     id: 'factory',
     name: '메카닉 팩토리',
     icon: '⚙️',
-    desc: '맞물려 회전하는 연쇄 기어와 가속 컨베이어!',
+    desc: '맞물려 회전하는 연쇄 기어와 8단 수평 컨베이어 벨트!',
     activeClasses: 'bg-amber-600 text-white border-amber-400 shadow-lg shadow-amber-900/40',
     badgeColor: '#f59e0b'
   }
@@ -157,6 +157,16 @@ interface Pendulum {
   maxAngle: number;
 }
 
+interface ConveyorBelt {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  speed: number;
+  label?: string;
+  color?: string;
+}
+
 interface MarbleRaceProps {
   students: Student[];
   numWinners: number;
@@ -206,6 +216,7 @@ export default function MarbleRace({
   const speedPadsRef = useRef<SpeedPad[]>([]);
   const wormholesRef = useRef<Wormhole[]>([]);
   const pendulumsRef = useRef<Pendulum[]>([]);
+  const conveyorsRef = useRef<ConveyorBelt[]>([]);
 
   // Overtake Slow-mo & Dynamic Camera Zoom
   const leaderIdRef = useRef<string | null>(null);
@@ -239,6 +250,7 @@ export default function MarbleRace({
     const speedPads: SpeedPad[] = [];
     const wormholes: Wormhole[] = [];
     const pendulums: Pendulum[] = [];
+    const conveyors: ConveyorBelt[] = [];
 
     // --- Common Finale: Funnel Bottleneck & Rotating Gate Barrier (y: 3080 to FINISH_Y) ---
     const ALLEY_L = 305;
@@ -434,45 +446,72 @@ export default function MarbleRace({
 
     } else if (theme === 'factory') {
       // ==========================================
-      // ⚙️ MAP 4: 메카닉 팩토리 & 기어 러시 맵 (FACTORY)
+      // ⚙️ MAP 4: 메카닉 팩토리 & 수평 컨베이어 벨트 맵 (FACTORY)
       // ==========================================
-      // Industrial Gear Spinners
-      // Pair 1 (Dual interlocking gear)
-      spinners.push({ x: 250, y: 1150, length: 125, angle: 0, speed: 0.045, color: '#f59e0b' });
-      spinners.push({ x: 450, y: 1150, length: 125, angle: Math.PI / 2, speed: -0.045, color: '#f59e0b' });
+      // Top Plinko Pins (y: 360 ~ 580)
+      for (let r = 0; r < 4; r++) {
+        const y = 370 + r * 60;
+        const isOdd = r % 2 === 1;
+        const cols = isOdd ? 8 : 9;
+        const spacing = TRACK_WIDTH / cols;
+        for (let c = 1; c < cols; c++) {
+          const x = c * spacing + (isOdd ? spacing / 2 : 0);
+          if (x > 50 && x < TRACK_WIDTH - 50) {
+            pegs.push({ x, y, radius: 6 });
+          }
+        }
+      }
 
-      // Triple gear row at y: 1850
-      spinners.push({ x: 180, y: 1850, length: 110, angle: 0, speed: 0.042, color: '#eab308' });
-      spinners.push({ x: 350, y: 1850, length: 130, angle: Math.PI / 3, speed: -0.048, color: '#f97316' });
-      spinners.push({ x: 520, y: 1850, length: 110, angle: 0, speed: 0.042, color: '#eab308' });
+      // ── CONVEYOR 1: Assembly Line 01 (우측 진행 수평 컨베이어) at y: 680 ──
+      // Spans x: 30 ~ 540 (우측 x: 540 ~ 680 사이로 구슬이 낙하)
+      conveyors.push({ x: 30, y: 680, width: 510, height: 32, speed: 7.5, label: "🏭 LINE 01 >>>" });
+      // 우측 벽면 유도 경사로
+      ramps.push({ x1: TRACK_WIDTH - 20, y1: 760, x2: 520, y2: 880 });
 
-      // Heavy Industrial Rotor at y: 2600
-      spinners.push({ x: 350, y: 2600, length: 160, angle: 0, speed: 0.038, color: '#ef4444' });
+      // ── CONVEYOR 2: Cargo Belt 02 (좌측 진행 수평 컨베이어) at y: 1040 ──
+      // Spans x: 160 ~ 670 (좌측 x: 20 ~ 160 사이로 구슬이 낙하)
+      conveyors.push({ x: 160, y: 1040, width: 510, height: 32, speed: -7.5, label: "<<< CARGO 02 🏭" });
+      // 좌측 벽면 유도 경사로
+      ramps.push({ x1: 20, y1: 1120, x2: 180, y2: 1240 });
 
-      // Directional Conveyor Speed Pads
-      speedPads.push({ x: 100, y: 850, width: 220, height: 32, boostY: 15, boostX: 5 });
-      speedPads.push({ x: 380, y: 1450, width: 220, height: 32, boostY: 15, boostX: -5 });
-      speedPads.push({ x: 100, y: 2200, width: 220, height: 32, boostY: 15, boostX: 6 });
-      speedPads.push({ x: 250, y: 2820, width: 200, height: 32, boostY: 18 });
+      // Industrial Gear Spinners (Pair 1 - Dual interlocking gear at y: 1350)
+      spinners.push({ x: 250, y: 1350, length: 125, angle: 0, speed: 0.045, color: '#f59e0b' });
+      spinners.push({ x: 450, y: 1350, length: 125, angle: Math.PI / 2, speed: -0.045, color: '#f59e0b' });
 
-      // Industrial Wrecking Ball Pendulum
-      pendulums.push({ anchorX: 350, anchorY: 1500, length: 150, bobRadius: 30, angle: -0.9, speed: 0.048, maxAngle: 1.15 });
+      // ── CONVEYORS 3 & 4: Dual Center-Converging Conveyors (중앙 합류 컨베이어) at y: 1560 ──
+      // 좌측 벨트는 우측으로, 우측 벨트는 좌측으로 중앙(x: 300~400)으로 구슬을 모음
+      conveyors.push({ x: 20, y: 1560, width: 280, height: 32, speed: 7.0, label: "FEEDER A >>>" });
+      conveyors.push({ x: 400, y: 1560, width: 280, height: 32, speed: -7.0, label: "<<< FEEDER B" });
 
-      // Factory Metal Chutes
-      ramps.push({ x1: 20, y1: 1000, x2: 450, y2: 1120 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1300, x2: 250, y2: 1420 });
-      ramps.push({ x1: 20, y1: 1680, x2: 450, y2: 1800 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 2050, x2: 250, y2: 2170 });
-      ramps.push({ x1: 20, y1: 2420, x2: 450, y2: 2540 });
+      // Industrial Wrecking Ball Pendulum (중앙 낙하 지점 거대 햄머추) at y: 1720
+      pendulums.push({ anchorX: 350, anchorY: 1640, length: 140, bobRadius: 32, angle: -0.9, speed: 0.05, maxAngle: 1.15 });
 
-      // Hydraulic Piston Bumpers
-      bumpers.push({ x: 540, y: 1060, radius: 36, pulse: 0 });
-      bumpers.push({ x: 160, y: 1360, radius: 36, pulse: 0 });
-      bumpers.push({ x: 540, y: 1740, radius: 36, pulse: 0 });
-      bumpers.push({ x: 160, y: 2110, radius: 36, pulse: 0 });
+      // Triple gear row at y: 1880
+      spinners.push({ x: 170, y: 1880, length: 105, angle: 0, speed: 0.042, color: '#eab308' });
+      spinners.push({ x: 350, y: 1880, length: 125, angle: Math.PI / 3, speed: -0.048, color: '#f97316' });
+      spinners.push({ x: 530, y: 1880, length: 105, angle: 0, speed: 0.042, color: '#eab308' });
 
-      // Factory Ventilation Shaft Warp
-      wormholes.push({ id: 'wh_fc', inX: 95, inY: 2350, outX: 570, outY: 950, radius: 26, color: '#f59e0b', pulse: 0 });
+      // ── CONVEYOR 5: High-Speed Turbo Conveyor (초고속 우측 컨베이어) at y: 2080 ──
+      conveyors.push({ x: 30, y: 2080, width: 520, height: 32, speed: 8.5, label: "⚡ TURBO EXPRESS 05 >>>" });
+
+      // ── CONVEYOR 6: Return Loop Conveyor (좌측 회송 컨베이어) at y: 2360 ──
+      conveyors.push({ x: 150, y: 2360, width: 520, height: 32, speed: -8.5, label: "<<< RETURN LOOP 06 ⚡" });
+
+      // Factory Ventilation Shaft Warp (환기구 역류 워프: y: 2480 -> y: 1200)
+      wormholes.push({ id: 'wh_fc', inX: 95, inY: 2480, outX: 580, outY: 1200, radius: 26, color: '#f59e0b', pulse: 0 });
+
+      // Heavy Industrial Rotor at y: 2620
+      spinners.push({ x: 350, y: 2620, length: 160, angle: 0, speed: 0.038, color: '#ef4444' });
+
+      // ── CONVEYORS 7 & 8: Pre-Finale Sorter Conveyors (결승선 진입 전 지그재그 분류 컨베이어) ──
+      conveyors.push({ x: 30, y: 2780, width: 440, height: 32, speed: 8.0, label: "SORTING A >>>" });
+      conveyors.push({ x: 230, y: 2940, width: 440, height: 32, speed: -8.0, label: "<<< SORTING B" });
+
+      // Hydraulic Piston Bumpers for extra dynamic rebound
+      bumpers.push({ x: 600, y: 730, radius: 34, pulse: 0 });
+      bumpers.push({ x: 100, y: 1090, radius: 34, pulse: 0 });
+      bumpers.push({ x: 600, y: 2130, radius: 34, pulse: 0 });
+      bumpers.push({ x: 100, y: 2410, radius: 34, pulse: 0 });
     }
 
     pegsRef.current = pegs;
@@ -482,6 +521,7 @@ export default function MarbleRace({
     speedPadsRef.current = speedPads;
     wormholesRef.current = wormholes;
     pendulumsRef.current = pendulums;
+    conveyorsRef.current = conveyors;
   };
 
   // Initialize Marbles
@@ -660,6 +700,7 @@ export default function MarbleRace({
       const speedPads = speedPadsRef.current;
       const wormholes = wormholesRef.current;
       const pendulums = pendulumsRef.current;
+      const conveyors = conveyorsRef.current;
 
       // 2-1. Random Marble Explosion Trigger
       if (bombMode && raceState === 'racing') {
@@ -993,6 +1034,82 @@ export default function MarbleRace({
             const hammerSpeed = pd.speed * pd.length;
             m.vx += nx * 14 + Math.cos(pd.angle) * hammerSpeed * 0.9;
             m.vy += ny * 14;
+            playBounceSound();
+          }
+        }
+
+        // --- Gimmick Collision 4: Solid Horizontal Conveyor Belts ---
+        for (let c = 0; c < conveyors.length; c++) {
+          const cb = conveyors[c];
+          const halfH = cb.height / 2;
+
+          // 1. Top Surface: Marble lands on and rides the conveyor belt!
+          if (
+            m.x >= cb.x - m.radius * 0.4 &&
+            m.x <= cb.x + cb.width + m.radius * 0.4 &&
+            m.y + m.radius >= cb.y &&
+            m.y - m.radius < cb.y + halfH
+          ) {
+            // Keep marble on top of the belt
+            m.y = cb.y - m.radius;
+            // Absorb downward velocity
+            if (m.vy > 0) {
+              m.vy = -m.vy * 0.15;
+            }
+            // Rapidly accelerate marble in conveyor movement direction
+            m.vx = m.vx * 0.7 + cb.speed * 1.35;
+
+            // Spawn conveyor track friction sparks
+            if (Math.random() < 0.28) {
+              particlesRef.current.push({
+                x: m.x,
+                y: m.y + m.radius,
+                vx: -cb.speed * 0.35 + (Math.random() - 0.5) * 2,
+                vy: -Math.random() * 2.5 - 0.5,
+                size: Math.random() * 2.5 + 1.5,
+                color: '#f59e0b',
+                alpha: 0.85,
+                life: 14
+              });
+            }
+          }
+          // 2. Bottom Surface: Marble bounces off underneath the conveyor
+          else if (
+            m.x >= cb.x - m.radius * 0.4 &&
+            m.x <= cb.x + cb.width + m.radius * 0.4 &&
+            m.y - m.radius <= cb.y + cb.height &&
+            m.y + m.radius > cb.y + halfH
+          ) {
+            m.y = cb.y + cb.height + m.radius;
+            m.vy = Math.abs(m.vy) * 0.6 + 2;
+            playBounceSound();
+          }
+          // 3. Left Pulley End Cap Collision (Rounded bumper)
+          else if (
+            Math.hypot(m.x - cb.x, m.y - (cb.y + halfH)) < m.radius + halfH
+          ) {
+            const dx = m.x - cb.x;
+            const dy = m.y - (cb.y + halfH);
+            const dist = Math.hypot(dx, dy) || 1;
+            const minDist = m.radius + halfH;
+            m.x = cb.x + (dx / dist) * minDist;
+            m.y = (cb.y + halfH) + (dy / dist) * minDist;
+            m.vx = (dx / dist) * 6;
+            m.vy = (dy / dist) * 6;
+            playBounceSound();
+          }
+          // 4. Right Pulley End Cap Collision (Rounded bumper)
+          else if (
+            Math.hypot(m.x - (cb.x + cb.width), m.y - (cb.y + halfH)) < m.radius + halfH
+          ) {
+            const dx = m.x - (cb.x + cb.width);
+            const dy = m.y - (cb.y + halfH);
+            const dist = Math.hypot(dx, dy) || 1;
+            const minDist = m.radius + halfH;
+            m.x = (cb.x + cb.width) + (dx / dist) * minDist;
+            m.y = (cb.y + halfH) + (dy / dist) * minDist;
+            m.vx = (dx / dist) * 6;
+            m.vy = (dy / dist) * 6;
             playBounceSound();
           }
         }
@@ -1532,6 +1649,120 @@ export default function MarbleRace({
         ctx.arc(bobX, bobY, pd.bobRadius * 0.4, 0, Math.PI * 2);
         ctx.fillStyle = '#ffffff';
         ctx.fill();
+        ctx.restore();
+      });
+
+      // Draw Horizontal Conveyor Belts
+      conveyors.forEach(cb => {
+        ctx.save();
+        const radius = cb.height / 2;
+        const isRight = cb.speed > 0;
+
+        // 1. Industrial Drop Shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+        ctx.beginPath();
+        ctx.roundRect(cb.x - 2, cb.y + 4, cb.width + 4, cb.height, radius);
+        ctx.fill();
+
+        // 2. Heavy Steel Outer Housing Chassis
+        ctx.fillStyle = '#1e293b';
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(cb.x, cb.y, cb.width, cb.height, radius);
+        ctx.fill();
+        ctx.stroke();
+
+        // 3. Yellow/Black Hazard Caution Stripes on Lower Frame
+        const stripeWidth = 14;
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(cb.x, cb.y + cb.height - 8, cb.width, 8, [0, 0, radius, radius]);
+        ctx.clip();
+        for (let sx = cb.x - 20; sx < cb.x + cb.width + 20; sx += stripeWidth * 2) {
+          ctx.fillStyle = '#f59e0b';
+          ctx.fillRect(sx, cb.y + cb.height - 8, stripeWidth, 8);
+          ctx.fillStyle = '#0f172a';
+          ctx.fillRect(sx + stripeWidth, cb.y + cb.height - 8, stripeWidth, 8);
+        }
+        ctx.restore();
+
+        // 4. Moving Industrial Tread Surface
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(cb.x + 2, cb.y + 2, cb.width - 4, cb.height - 10, [radius, radius, 2, 2]);
+        ctx.clip();
+        ctx.fillStyle = '#090d16';
+        ctx.fillRect(cb.x, cb.y, cb.width, cb.height);
+
+        // Animated Conveyor Chevron Arrows / Treads
+        const arrowSpacing = 28;
+        const animOffset = ((Date.now() * 0.06 * (isRight ? 1 : -1)) % arrowSpacing + arrowSpacing) % arrowSpacing;
+
+        ctx.strokeStyle = isRight ? '#f59e0b' : '#38bdf8';
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
+        for (let ax = cb.x - arrowSpacing + animOffset; ax < cb.x + cb.width + arrowSpacing; ax += arrowSpacing) {
+          ctx.beginPath();
+          if (isRight) {
+            ctx.moveTo(ax - 6, cb.y + 5);
+            ctx.lineTo(ax + 3, cb.y + (cb.height - 10) / 2);
+            ctx.lineTo(ax - 6, cb.y + cb.height - 11);
+          } else {
+            ctx.moveTo(ax + 6, cb.y + 5);
+            ctx.lineTo(ax - 3, cb.y + (cb.height - 10) / 2);
+            ctx.lineTo(ax + 6, cb.y + cb.height - 11);
+          }
+          ctx.stroke();
+        }
+        ctx.restore();
+
+        // 5. Rotating End Pulley Gears (Left & Right)
+        const rotAngle = Date.now() * 0.008 * (isRight ? 1 : -1);
+        [cb.x + radius, cb.x + cb.width - radius].forEach(px => {
+          ctx.save();
+          ctx.translate(px, cb.y + radius);
+          ctx.rotate(rotAngle);
+          // Pulley wheel
+          ctx.fillStyle = '#334155';
+          ctx.beginPath();
+          ctx.arc(0, 0, radius - 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.strokeStyle = '#94a3b8';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          // Spokes
+          ctx.strokeStyle = '#f8fafc';
+          ctx.lineWidth = 1.5;
+          for (let g = 0; g < 4; g++) {
+            ctx.beginPath();
+            ctx.moveTo(-radius + 5, 0);
+            ctx.lineTo(radius - 5, 0);
+            ctx.stroke();
+            ctx.rotate(Math.PI / 4);
+          }
+          // Center bolt
+          ctx.fillStyle = '#f59e0b';
+          ctx.beginPath();
+          ctx.arc(0, 0, 3, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        });
+
+        // 6. Conveyor Title Tag in Center
+        if (cb.label) {
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = '#ffffff';
+          ctx.shadowColor = 'rgba(0,0,0,0.9)';
+          ctx.shadowBlur = 4;
+          ctx.fillText(cb.label, cb.x + cb.width / 2, cb.y + (cb.height - 8) / 2);
+          ctx.shadowBlur = 0;
+        }
+
         ctx.restore();
       });
 
