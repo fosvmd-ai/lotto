@@ -41,7 +41,7 @@ export const MAP_THEMES: MapThemeInfo[] = [
     id: 'glacier',
     name: '빙하 협곡',
     icon: '❄️',
-    desc: '미끄러운 저마찰 얼음 바닥과 거대한 스윙 해머추!',
+    desc: '강력한 눈보라 감속과 닿으면 얼어붙는 얼음 오브젝트!',
     activeClasses: 'bg-cyan-600 text-white border-cyan-400 shadow-lg shadow-cyan-900/40',
     badgeColor: '#06b6d4'
   },
@@ -75,6 +75,8 @@ interface Marble {
   isBomb?: boolean;
   bombTimer?: number;
   boostEffect?: number;
+  frozenTimer?: number;
+  freezeCooldown?: number;
 }
 
 interface Shockwave {
@@ -167,6 +169,24 @@ interface ConveyorBelt {
   color?: string;
 }
 
+interface IceTrap {
+  id: string;
+  x: number;
+  y: number;
+  radius: number;
+  pulse: number;
+  frozenDuration: number;
+}
+
+interface Snowflake {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  size: number;
+  alpha: number;
+}
+
 interface MarbleRaceProps {
   students: Student[];
   numWinners: number;
@@ -204,6 +224,8 @@ export default function MarbleRace({
   const [winRule, setWinRule] = useState<'first' | 'last'>('first');
   const [eliminated, setEliminated] = useState<string[]>([]);
   const [bombAlert, setBombAlert] = useState<string | null>(null);
+  const [blizzardAlert, setBlizzardAlert] = useState<string | null>(null);
+  const [freezeAlert, setFreezeAlert] = useState<string | null>(null);
   const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
   const [finishCountdown, setFinishCountdown] = useState<number>(30);
   const [mapTheme, setMapTheme] = useState<MapTheme>(initialMapTheme);
@@ -217,6 +239,11 @@ export default function MarbleRace({
   const wormholesRef = useRef<Wormhole[]>([]);
   const pendulumsRef = useRef<Pendulum[]>([]);
   const conveyorsRef = useRef<ConveyorBelt[]>([]);
+  const iceTrapsRef = useRef<IceTrap[]>([]);
+  const blizzardActiveRef = useRef<boolean>(false);
+  const blizzardDurationRef = useRef<number>(0);
+  const nextBlizzardTimeRef = useRef<number>(0);
+  const snowflakesRef = useRef<Snowflake[]>([]);
 
   // Overtake Slow-mo & Dynamic Camera Zoom
   const leaderIdRef = useRef<string | null>(null);
@@ -251,6 +278,7 @@ export default function MarbleRace({
     const wormholes: Wormhole[] = [];
     const pendulums: Pendulum[] = [];
     const conveyors: ConveyorBelt[] = [];
+    const iceTraps: IceTrap[] = [];
 
     // --- Common Finale: Funnel Bottleneck & Rotating Gate Barrier (y: 3080 to FINISH_Y) ---
     const ALLEY_L = 305;
@@ -444,6 +472,29 @@ export default function MarbleRace({
       // Glacier Crevasse Warp
       wormholes.push({ id: 'wh_gl', inX: 90, inY: 2400, outX: 560, outY: 1550, radius: 25, color: '#38bdf8', pulse: 0 });
 
+      // 🧊 Strategic Ice Crystal Traps (닿으면 꽁꽁 얼어붙어 1.5초간 멈추는 얼음 오브젝트)
+      iceTraps.push({ id: 'ice_1', x: 260, y: 720, radius: 28, pulse: 0, frozenDuration: 90 });
+      iceTraps.push({ id: 'ice_2', x: 420, y: 1120, radius: 28, pulse: 0, frozenDuration: 90 });
+      iceTraps.push({ id: 'ice_3', x: 180, y: 1470, radius: 26, pulse: 0, frozenDuration: 85 });
+      iceTraps.push({ id: 'ice_4', x: 350, y: 1850, radius: 30, pulse: 0, frozenDuration: 95 });
+      iceTraps.push({ id: 'ice_5', x: 160, y: 2240, radius: 28, pulse: 0, frozenDuration: 90 });
+      iceTraps.push({ id: 'ice_6', x: 450, y: 2600, radius: 28, pulse: 0, frozenDuration: 90 });
+      iceTraps.push({ id: 'ice_7', x: 280, y: 2980, radius: 28, pulse: 0, frozenDuration: 95 });
+
+      // Generate Ambient Snowflakes for Glacier theme
+      const flakes: Snowflake[] = [];
+      for (let i = 0; i < 90; i++) {
+        flakes.push({
+          x: Math.random() * TRACK_WIDTH,
+          y: Math.random() * TRACK_HEIGHT,
+          vx: (Math.random() - 0.5) * 2 - 1.2,
+          vy: Math.random() * 2.5 + 1.5,
+          size: Math.random() * 3 + 1.5,
+          alpha: Math.random() * 0.7 + 0.3
+        });
+      }
+      snowflakesRef.current = flakes;
+
     } else if (theme === 'factory') {
       // ==========================================
       // ⚙️ MAP 4: 메카닉 팩토리 & 수평 컨베이어 벨트 맵 (FACTORY)
@@ -522,6 +573,7 @@ export default function MarbleRace({
     wormholesRef.current = wormholes;
     pendulumsRef.current = pendulums;
     conveyorsRef.current = conveyors;
+    iceTrapsRef.current = iceTraps;
   };
 
   // Initialize Marbles
@@ -550,7 +602,9 @@ export default function MarbleRace({
         color,
         finished: false,
         finishRank: 0,
-        trail: []
+        trail: [],
+        frozenTimer: 0,
+        freezeCooldown: 0
       });
     });
 
@@ -591,6 +645,12 @@ export default function MarbleRace({
           setBombAlert(null);
           setOvertakeAlert(null);
           setEliminated([]);
+          // Reset Glacier blizzard schedule
+          blizzardActiveRef.current = false;
+          blizzardDurationRef.current = 0;
+          nextBlizzardTimeRef.current = Date.now() + 6500;
+          setBlizzardAlert(null);
+          setFreezeAlert(null);
           // Gate open sound
           soundEngine.playWin('marble');
           return 0;
@@ -616,6 +676,11 @@ export default function MarbleRace({
     setBombAlert(null);
     setOvertakeAlert(null);
     setEliminated([]);
+    blizzardActiveRef.current = false;
+    blizzardDurationRef.current = 0;
+    nextBlizzardTimeRef.current = Date.now() + 6500;
+    setBlizzardAlert(null);
+    setFreezeAlert(null);
     setRaceState('ready');
     setWinners([]);
     winnersListRef.current = [];
@@ -701,6 +766,46 @@ export default function MarbleRace({
       const wormholes = wormholesRef.current;
       const pendulums = pendulumsRef.current;
       const conveyors = conveyorsRef.current;
+      const iceTraps = iceTrapsRef.current;
+
+      // 1-3. Update Ice Traps pulse decay
+      iceTraps.forEach(it => {
+        if (it.pulse > 0) it.pulse = Math.max(0, it.pulse - 0.04);
+      });
+
+      // 1-4. Update Snowflakes & Glacier Blizzard Cycle
+      if (mapTheme === 'glacier') {
+        const now = Date.now();
+        if (raceState === 'racing') {
+          if (!blizzardActiveRef.current && now > nextBlizzardTimeRef.current) {
+            blizzardActiveRef.current = true;
+            blizzardDurationRef.current = 240; // ~4 seconds of intense blizzard
+            soundEngine.playBlizzardHowl();
+            setBlizzardAlert('❄️ 거센 눈보라 강타! 볼 낙하 속도 급감소! 🌨️');
+          } else if (blizzardActiveRef.current) {
+            blizzardDurationRef.current--;
+            if (blizzardDurationRef.current <= 0) {
+              blizzardActiveRef.current = false;
+              setBlizzardAlert(null);
+              nextBlizzardTimeRef.current = now + (9000 + Math.random() * 5000);
+            }
+          }
+        }
+
+        const isBlizzard = blizzardActiveRef.current;
+        snowflakesRef.current.forEach(sf => {
+          if (isBlizzard) {
+            sf.x += sf.vx * 3.5 - 7;
+            sf.y += sf.vy * 1.4;
+          } else {
+            sf.x += sf.vx;
+            sf.y += sf.vy;
+          }
+          if (sf.x < 0) sf.x = TRACK_WIDTH;
+          if (sf.x > TRACK_WIDTH) sf.x = 0;
+          if (sf.y > TRACK_HEIGHT) sf.y = 0;
+        });
+      }
 
       // 2-1. Random Marble Explosion Trigger
       if (bombMode && raceState === 'racing') {
@@ -752,6 +857,52 @@ export default function MarbleRace({
           m.y += m.vy;
           m.x += m.vx;
           continue;
+        }
+
+        // Decay freeze cooldown
+        if (m.freezeCooldown && m.freezeCooldown > 0) {
+          m.freezeCooldown--;
+        }
+
+        // Frozen Marble Handling (얼음 오브젝트에 얼어붙은 상태: 완전 정지 및 카운트다운)
+        if (m.frozenTimer && m.frozenTimer > 0) {
+          m.frozenTimer--;
+          m.vx = 0;
+          m.vy = 0;
+
+          // Sparkling frost crystals while frozen
+          if (Math.random() < 0.22) {
+            particlesRef.current.push({
+              x: m.x + (Math.random() - 0.5) * m.radius * 2,
+              y: m.y + (Math.random() - 0.5) * m.radius * 2,
+              vx: (Math.random() - 0.5) * 1.5,
+              vy: (Math.random() - 0.5) * 1.5,
+              size: Math.random() * 2.5 + 1,
+              color: '#38bdf8',
+              alpha: 0.9,
+              life: 16
+            });
+          }
+
+          if (m.frozenTimer === 0) {
+            // Shatter ice when thaw timer hits 0!
+            soundEngine.playIceShatter();
+            m.freezeCooldown = 80; // brief immunity so ball rolls off trap
+            m.vy = 2.5; // slight downward drop nudge
+            for (let k = 0; k < 16; k++) {
+              particlesRef.current.push({
+                x: m.x,
+                y: m.y,
+                vx: (Math.random() - 0.5) * 8,
+                vy: (Math.random() - 0.5) * 8,
+                size: Math.random() * 4 + 2,
+                color: k % 2 === 0 ? '#38bdf8' : '#e0f2fe',
+                alpha: 1,
+                life: 25
+              });
+            }
+          }
+          continue; // Marble remains completely stopped while frozen!
         }
 
         // Bomb countdown & detonation
@@ -825,6 +976,14 @@ export default function MarbleRace({
         }
 
         m.vy += gravity * timeScale;
+
+        // Blizzard Storm Drag Effect (눈보라 몰아칠 때 볼 낙하 속도 급감소 및 저항)
+        if (mapTheme === 'glacier' && blizzardActiveRef.current) {
+          m.vy = Math.min(m.vy, 2.6);
+          m.vy *= 0.85;
+          m.vx += (Math.random() - 0.5) * 1.5 - 0.8;
+        }
+
         m.vx *= Math.pow(friction, timeScale);
         m.vy *= Math.pow(friction, timeScale);
 
@@ -1111,6 +1270,52 @@ export default function MarbleRace({
             m.vx = (dx / dist) * 6;
             m.vy = (dy / dist) * 6;
             playBounceSound();
+          }
+        }
+
+        // --- Gimmick Collision 5: Ice Crystal Traps (빙하 협곡 얼음 오브젝트 - 닿으면 결빙 정지) ---
+        for (let it = 0; it < iceTraps.length; it++) {
+          const trap = iceTraps[it];
+          const dx = m.x - trap.x;
+          const dy = m.y - trap.y;
+          const dist = Math.hypot(dx, dy);
+          const minDist = m.radius + trap.radius;
+
+          if (dist < minDist) {
+            if ((!m.frozenTimer || m.frozenTimer <= 0) && (!m.freezeCooldown || m.freezeCooldown <= 0)) {
+              // Freeze the marble!
+              m.frozenTimer = trap.frozenDuration;
+              m.vx = 0;
+              m.vy = 0;
+              trap.pulse = 1;
+              soundEngine.playFreeze();
+              setFreezeAlert(`🧊 [${m.name}] 얼음 오브젝트에 닿아 꽁꽁 얼어붙었습니다! (1.5초 정지)`);
+              setTimeout(() => setFreezeAlert(null), 2000);
+
+              // Spawn freeze frostburst particles
+              for (let k = 0; k < 12; k++) {
+                particlesRef.current.push({
+                  x: m.x,
+                  y: m.y,
+                  vx: (Math.random() - 0.5) * 6,
+                  vy: (Math.random() - 0.5) * 6,
+                  size: Math.random() * 3 + 2,
+                  color: '#38bdf8',
+                  alpha: 1,
+                  life: 22
+                });
+              }
+              break;
+            } else if (!m.frozenTimer || m.frozenTimer <= 0) {
+              // Elastic bounce off solid ice object during cooldown
+              const nx = dx / (dist || 1);
+              const ny = dy / (dist || 1);
+              m.x = trap.x + nx * minDist;
+              m.y = trap.y + ny * minDist;
+              m.vx = nx * 5;
+              m.vy = ny * 5;
+              playBounceSound();
+            }
           }
         }
 
@@ -1766,6 +1971,67 @@ export default function MarbleRace({
         ctx.restore();
       });
 
+      // Draw Ice Crystal Traps (빙하 협곡 얼음 오브젝트)
+      iceTraps.forEach(trap => {
+        ctx.save();
+        const r = trap.radius + (trap.pulse * 6);
+
+        // Ambient Ice Frost Glow
+        const auraGrad = ctx.createRadialGradient(trap.x, trap.y, r * 0.2, trap.x, trap.y, r * 1.6);
+        auraGrad.addColorStop(0, trap.pulse > 0 ? 'rgba(56, 189, 248, 0.6)' : 'rgba(56, 189, 248, 0.35)');
+        auraGrad.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        ctx.fillStyle = auraGrad;
+        ctx.beginPath();
+        ctx.arc(trap.x, trap.y, r * 1.6, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Faceted Hexagonal Ice Crystal
+        ctx.beginPath();
+        for (let i = 0; i < 6; i++) {
+          const angle = (i * Math.PI) / 3;
+          const px = trap.x + r * Math.cos(angle);
+          const py = trap.y + r * Math.sin(angle);
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+
+        const iceGrad = ctx.createLinearGradient(trap.x - r, trap.y - r, trap.x + r, trap.y + r);
+        iceGrad.addColorStop(0, '#e0f2fe');
+        iceGrad.addColorStop(0.35, '#38bdf8');
+        iceGrad.addColorStop(1, '#0284c7');
+        ctx.fillStyle = iceGrad;
+        ctx.fill();
+
+        ctx.strokeStyle = trap.pulse > 0 ? '#ffffff' : '#bae6fd';
+        ctx.lineWidth = trap.pulse > 0 ? 4 : 2.5;
+        ctx.stroke();
+
+        // Internal crystal facet lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.65)';
+        ctx.lineWidth = 1.5;
+        for (let i = 0; i < 6; i += 2) {
+          const angle = (i * Math.PI) / 3;
+          ctx.beginPath();
+          ctx.moveTo(trap.x, trap.y);
+          ctx.lineTo(trap.x + r * Math.cos(angle), trap.y + r * Math.sin(angle));
+          ctx.stroke();
+        }
+
+        // Center ice emoji emblem
+        ctx.font = '15px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🧊', trap.x, trap.y);
+
+        // Warning Badge
+        ctx.font = 'bold 9px sans-serif';
+        ctx.fillStyle = '#7dd3fc';
+        ctx.fillText('ICE TRAP', trap.x, trap.y + r + 11);
+
+        ctx.restore();
+      });
+
       // Draw Finish Line (Narrow Alley Goal & Checkered Pattern)
       ctx.save();
       // Checkered Pattern inside the narrow alley (305 to 395)
@@ -1793,6 +2059,45 @@ export default function MarbleRace({
       ctx.font = 'bold 12px sans-serif';
       ctx.fillText('⚠️ DANGER: FINAL ROTATING GATE BARRIER ⚠️', TRACK_WIDTH / 2, 3105);
       ctx.restore();
+
+      // Draw Snowflakes & Blizzard Storm Visuals (Glacier theme)
+      if (mapTheme === 'glacier') {
+        const isBlizzard = blizzardActiveRef.current;
+        snowflakesRef.current.forEach(sf => {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(sf.x, sf.y, isBlizzard ? sf.size * 1.3 : sf.size, 0, Math.PI * 2);
+          ctx.fillStyle = isBlizzard ? '#ffffff' : 'rgba(224, 242, 254, 0.85)';
+          ctx.globalAlpha = Math.min(1, sf.alpha * (isBlizzard ? 1.4 : 1));
+          ctx.fill();
+          ctx.restore();
+        });
+
+        // Blizzard Wind Streaks across current camera view
+        if (isBlizzard) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = 'round';
+          for (let w = 0; w < 20; w++) {
+            const wx = ((Date.now() * 1.8 + w * 130) % (TRACK_WIDTH + 300)) - 100;
+            const wy = (cameraY + (w * 40) % 650);
+            ctx.beginPath();
+            ctx.moveTo(wx, wy);
+            ctx.lineTo(wx - 75, wy + 20);
+            ctx.stroke();
+          }
+
+          // Icy Mist Vignette across camera
+          const mistGrad = ctx.createLinearGradient(0, cameraY, 0, cameraY + 650);
+          mistGrad.addColorStop(0, 'rgba(186, 230, 253, 0.22)');
+          mistGrad.addColorStop(0.5, 'rgba(125, 211, 252, 0.12)');
+          mistGrad.addColorStop(1, 'rgba(186, 230, 253, 0.22)');
+          ctx.fillStyle = mistGrad;
+          ctx.fillRect(0, cameraY, TRACK_WIDTH, 650);
+          ctx.restore();
+        }
+      }
 
       // Draw Shockwaves
       shockwavesRef.current.forEach(sw => {
@@ -1883,6 +2188,61 @@ export default function MarbleRace({
         ctx.strokeStyle = m.isBomb ? '#ef4444' : '#ffffff';
         ctx.lineWidth = m.isBomb ? 2.5 : 1.5;
         ctx.stroke();
+
+        // Frozen Ice Crystal Encasement (얼어붙은 구슬 얼음 결정체 연출)
+        if (m.frozenTimer && m.frozenTimer > 0) {
+          ctx.save();
+          const iceBoxSize = m.radius * 2.5;
+
+          // Outer Ice Glow & Translucent Frost Shell
+          ctx.beginPath();
+          ctx.roundRect(m.x - iceBoxSize / 2, m.y - iceBoxSize / 2, iceBoxSize, iceBoxSize, 6);
+          ctx.fillStyle = 'rgba(56, 189, 248, 0.55)';
+          ctx.strokeStyle = '#e0f2fe';
+          ctx.lineWidth = 3;
+          ctx.fill();
+          ctx.stroke();
+
+          // Ice Specular Highlights & Glint
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.moveTo(m.x - iceBoxSize / 2 + 3, m.y - iceBoxSize / 2 + 3);
+          ctx.lineTo(m.x - iceBoxSize / 2 + 10, m.y - iceBoxSize / 2 + 3);
+          ctx.lineTo(m.x - iceBoxSize / 2 + 3, m.y - iceBoxSize / 2 + 10);
+          ctx.fill();
+
+          // Growing Cracks as thaw timer counts down
+          const crackStage = Math.floor((1 - m.frozenTimer / 90) * 3);
+          if (crackStage >= 1) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(m.x - 6, m.y - 8);
+            ctx.lineTo(m.x + 2, m.y);
+            ctx.lineTo(m.x - 2, m.y + 7);
+            ctx.stroke();
+          }
+          if (crackStage >= 2) {
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.lineWidth = 1.8;
+            ctx.beginPath();
+            ctx.moveTo(m.x + 7, m.y - 5);
+            ctx.lineTo(m.x, m.y + 3);
+            ctx.lineTo(m.x + 5, m.y + 9);
+            ctx.stroke();
+          }
+
+          // Frozen snowflake indicator and seconds badge
+          ctx.font = '14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('❄️', m.x, m.y - iceBoxSize / 2 - 8);
+
+          ctx.font = 'bold 9px sans-serif';
+          ctx.fillStyle = '#7dd3fc';
+          ctx.fillText(`${(m.frozenTimer / 60).toFixed(1)}s`, m.x, m.y + iceBoxSize / 2 + 11);
+
+          ctx.restore();
+        }
 
         // 1st Place Golden Crown on Current Leader
         const isCurrent1st = currentLead && currentLead.id === m.id && !m.finished && raceState === 'racing';
@@ -2158,6 +2518,22 @@ export default function MarbleRace({
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-rose-600/90 backdrop-blur-md text-white px-5 py-2 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-2 z-50 animate-bounce border border-rose-400">
             <Flame className="w-4 h-4 text-amber-300 fill-current" />
             <span>{bombAlert}</span>
+          </div>
+        )}
+
+        {/* Blizzard Alert Floating Notification (Glacier Theme) */}
+        {blizzardAlert && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-cyan-600/90 backdrop-blur-md text-white px-5 py-2 rounded-2xl shadow-[0_0_35px_rgba(6,182,212,0.75)] font-black text-sm flex items-center gap-2 z-50 animate-pulse border border-cyan-300">
+            <Snowflake className="w-4 h-4 text-cyan-200 animate-spin" />
+            <span>{blizzardAlert}</span>
+          </div>
+        )}
+
+        {/* Ice Freeze Alert Floating Notification */}
+        {freezeAlert && (
+          <div className="absolute top-14 left-1/2 -translate-x-1/2 bg-blue-900/95 backdrop-blur-md text-cyan-100 px-5 py-2 rounded-2xl shadow-xl font-black text-xs sm:text-sm flex items-center gap-2 z-50 animate-in zoom-in-95 border border-cyan-400">
+            <span className="text-base animate-bounce">🧊</span>
+            <span>{freezeAlert}</span>
           </div>
         )}
 

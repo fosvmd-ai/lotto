@@ -216,6 +216,25 @@ class SoundEngine {
     this.playTone(1100, 'sine', 0.25, 0.08, 0.3, 500);
   }
 
+  // Ice freeze sound (crystal crack ping)
+  public playFreeze() {
+    this.playTone(2100, 'sine', 0.25, 0, 0.35, 2900);
+    this.playTone(3200, 'triangle', 0.2, 0.04, 0.25, 1800);
+  }
+
+  // Ice shatter sound (glass/ice crystal shatter)
+  public playIceShatter() {
+    this.playNoise(0.22, 'highpass', 2400, 0, 0.35);
+    this.playTone(1600, 'triangle', 0.15, 0, 0.28, 600);
+    this.playTone(2400, 'sine', 0.12, 0.05, 0.2, 800);
+  }
+
+  // Blizzard howling wind gust
+  public playBlizzardHowl() {
+    this.playNoise(1.2, 'bandpass', 450, 0, 0.35);
+    this.playTone(280, 'sine', 1.0, 0, 0.2, 180);
+  }
+
   public stopTick(effect: string) {
     // Clean up if any continuous sound is active
     if (this.continuousOsc) {
