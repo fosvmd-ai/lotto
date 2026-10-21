@@ -50,7 +50,11 @@ import {
   Wind,
   Zap,
   Search,
-  X
+  X,
+  Clock,
+  Check,
+  CheckCheck,
+  ShoppingBag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -87,6 +91,38 @@ interface Entry {
   picks: string[];
   timestamp: any;
   adminEmail?: string;
+}
+
+interface TicketRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  amount: number;
+  timestamp: number;
+  status: 'pending' | 'approved' | 'rejected';
+  adminEmail?: string;
+}
+
+function isTicketRequestEntry(entry: Entry): boolean {
+  return Array.isArray(entry.picks) && entry.picks[0] === '__TICKET_REQ__';
+}
+
+function parseTicketRequest(entry: Entry): TicketRequest | null {
+  if (!isTicketRequestEntry(entry)) return null;
+  const amount = parseInt(entry.picks[1], 10) || 1;
+  const status = (entry.picks[2] as 'pending' | 'approved' | 'rejected') || 'pending';
+  const ts = typeof entry.timestamp === 'number' 
+    ? entry.timestamp 
+    : (parseInt(entry.picks[3], 10) || Date.now());
+  return {
+    id: entry.id,
+    studentId: entry.uid,
+    studentName: entry.studentName,
+    amount,
+    timestamp: ts,
+    status,
+    adminEmail: entry.adminEmail
+  };
 }
 
 interface PrizeCriteria {
@@ -586,7 +622,7 @@ function SuperAdminView({ students, entries, admins }: {
       stats[email].studentCount++;
     });
 
-    entries.forEach(e => {
+    entries.filter(e => !isTicketRequestEntry(e)).forEach(e => {
       const email = e.adminEmail || "fosvmd@gmail.com";
       if (!stats[email]) stats[email] = { studentCount: 0, entryCount: 0 };
       stats[email].entryCount++;
@@ -814,14 +850,37 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     return filteredStudents.filter(s => s.name.toLowerCase().includes(q));
   }, [filteredStudents, studentSearchQuery]);
 
+  const isSuperAdmin = user?.email === "fosvm2@gmail.com" || user?.email === "fosvmd@gmail.com";
+
   const totalTicketsAll = useMemo(() => {
     return filteredStudents.reduce((sum, s) => sum + (s.tickets || 1), 0);
   }, [filteredStudents]);
 
   const filteredEntries = useMemo(() => {
     if (!user?.email) return [];
-    return entries.filter(e => e.adminEmail === user.email || (!e.adminEmail && user.email === "fosvmd@gmail.com"));
+    return entries
+      .filter(e => !isTicketRequestEntry(e))
+      .filter(e => e.adminEmail === user.email || (!e.adminEmail && user.email === "fosvmd@gmail.com"));
   }, [entries, user?.email]);
+
+  const pendingTicketRequests = useMemo(() => {
+    return entries
+      .filter(isTicketRequestEntry)
+      .map(parseTicketRequest)
+      .filter((req): req is TicketRequest => {
+        if (!req) return false;
+        if (req.status !== 'pending') return false;
+        if (user?.email && req.adminEmail && req.adminEmail !== user.email && !isSuperAdmin) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => b.timestamp - a.timestamp);
+  }, [entries, user?.email, isSuperAdmin]);
+
+  const totalPendingTickets = useMemo(() => {
+    return pendingTicketRequests.reduce((sum, r) => sum + r.amount, 0);
+  }, [pendingTicketRequests]);
 
   const pendingStudents = useMemo(() => {
     const enteredNames = new Set(filteredEntries.map(e => e.studentName));
@@ -909,6 +968,186 @@ function TeacherView({ students, entries, gameState, admins, user }: {
         await batch.commit();
         setIsModalOpen(false);
       }
+    );
+  };
+
+  const approveTicketRequest = async (req: TicketRequest) => {
+    try {
+      const student = students.find(s => s.id === req.studentId || s.name === req.studentName);
+      if (!student) {
+        alert("해당 학생을 찾을 수 없습니다.");
+        return;
+      }
+      await updateDoc(doc(db, 'students', student.id), {
+        tickets: increment(req.amount)
+      });
+      await deleteDoc(doc(db, 'entries', req.id));
+      soundEngine.playTick();
+    } catch (err: any) {
+      console.error("Failed to approve ticket request:", err);
+      alert("승인 처리 중 오류가 발생했습니다: " + (err?.message || err));
+    }
+  };
+
+  const rejectTicketRequest = async (req: TicketRequest) => {
+    showConfirm(
+      "추가구매 요청 반려",
+      `${req.studentName} 학생의 응모권 ${req.amount}장 추가구매 요청을 반려하시겠습니까?`,
+      async () => {
+        try {
+          await deleteDoc(doc(db, 'entries', req.id));
+          setIsModalOpen(false);
+        } catch (err: any) {
+          console.error("Failed to reject ticket request:", err);
+          alert("반려 처리 중 오류가 발생했습니다: " + (err?.message || err));
+        }
+      }
+    );
+  };
+
+  const approveAllTicketRequests = async () => {
+    if (pendingTicketRequests.length === 0) return;
+    const totalCount = pendingTicketRequests.reduce((sum, r) => sum + r.amount, 0);
+    showConfirm(
+      "추가구매 요청 일괄 승인",
+      `대기 중인 ${pendingTicketRequests.length}건의 요청을 모두 승인하고, 총 ${totalCount}장의 응모권을 각 학생에게 지급하시겠습니까?`,
+      async () => {
+        try {
+          const batch = writeBatch(db);
+          const studentAdditions = new Map<string, number>();
+
+          pendingTicketRequests.forEach(req => {
+            const student = students.find(s => s.id === req.studentId || s.name === req.studentName);
+            if (student) {
+              studentAdditions.set(student.id, (studentAdditions.get(student.id) || 0) + req.amount);
+            }
+            batch.delete(doc(db, 'entries', req.id));
+          });
+
+          studentAdditions.forEach((amt, sId) => {
+            batch.update(doc(db, 'students', sId), {
+              tickets: increment(amt)
+            });
+          });
+
+          await batch.commit();
+          setIsModalOpen(false);
+          soundEngine.playWin();
+        } catch (err: any) {
+          console.error("Failed to approve all ticket requests:", err);
+          alert("일괄 승인 중 오류가 발생했습니다: " + (err?.message || err));
+        }
+      }
+    );
+  };
+
+  const approveRequestsForStudent = async (studentId: string, studentName: string) => {
+    const studentRequests = pendingTicketRequests.filter(
+      r => r.studentId === studentId || r.studentName === studentName
+    );
+    if (studentRequests.length === 0) return;
+    const totalAmount = studentRequests.reduce((sum, r) => sum + r.amount, 0);
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'students', studentId), {
+        tickets: increment(totalAmount)
+      });
+      studentRequests.forEach(r => {
+        batch.delete(doc(db, 'entries', r.id));
+      });
+      await batch.commit();
+      soundEngine.playTick();
+    } catch (err: any) {
+      console.error("Failed to approve student requests:", err);
+      alert("승인 처리 중 오류: " + (err?.message || err));
+    }
+  };
+
+  const renderTicketRequestsSection = () => {
+    if (pendingTicketRequests.length === 0) return null;
+
+    return (
+      <section className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-3xl p-6 shadow-md shadow-amber-500/5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-amber-200">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-200 shrink-0">
+              <Ticket className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-lg font-black text-slate-900">
+                  응모권 추가구매 요청
+                </h3>
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-xs font-black shadow-xs animate-pulse">
+                  {pendingTicketRequests.length}건 대기 중
+                </span>
+                <span className="text-xs font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
+                  총 {totalPendingTickets}장
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 font-medium mt-0.5">
+                학생이 응모권을 추가 요청했습니다. 승인 시 해당 학생의 응모권이 즉시 지급됩니다.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={approveAllTicketRequests}
+            className="px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-black text-sm shadow-md shadow-amber-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4 fill-white" />
+            전체 일괄 승인 ({totalPendingTickets}장)
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {pendingTicketRequests.map((req) => {
+            const student = students.find(s => s.id === req.studentId || s.name === req.studentName);
+            const currentTickets = student?.tickets || 1;
+            const timeStr = new Date(req.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            return (
+              <div 
+                key={req.id}
+                className="p-3.5 bg-white rounded-2xl border border-amber-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-amber-400 hover:shadow-xs transition-all"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-black text-slate-900 text-sm truncate">{req.studentName}</span>
+                    <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 text-xs font-black shrink-0">
+                      +{req.amount}장 요청
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">
+                    현재 {currentTickets}장 보유 · {timeStr}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => approveTicketRequest(req)}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer"
+                    title="승인하여 응모권 지급"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    승인
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => rejectTicketRequest(req)}
+                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                    title="반려"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
     );
   };
 
@@ -1120,6 +1359,11 @@ function TeacherView({ students, entries, gameState, admins, user }: {
         >
           <LayoutDashboard className="w-4 h-4" />
           대시보드
+          {pendingTicketRequests.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[10px] rounded-full font-black animate-pulse">
+              {pendingTicketRequests.length}
+            </span>
+          )}
         </button>
         <button 
           onClick={() => setActiveTab('students')}
@@ -1130,6 +1374,11 @@ function TeacherView({ students, entries, gameState, admins, user }: {
         >
           <Users className="w-4 h-4" />
           학생 관리
+          {pendingTicketRequests.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[10px] rounded-full font-black animate-pulse">
+              {pendingTicketRequests.length}
+            </span>
+          )}
         </button>
         <button 
           onClick={() => setActiveTab('settings')}
@@ -1145,6 +1394,8 @@ function TeacherView({ students, entries, gameState, admins, user }: {
 
       {activeTab === 'dashboard' && (
         <div className="space-y-8">
+          {renderTicketRequestsSection()}
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4">
               <div className="p-3 bg-blue-100 rounded-2xl">
@@ -1301,6 +1552,8 @@ function TeacherView({ students, entries, gameState, admins, user }: {
 
       {activeTab === 'students' && (
         <div className="space-y-6">
+          {renderTicketRequestsSection()}
+
           <section className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200">
             {/* Header with Title & Action Buttons */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -1434,7 +1687,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
             {searchedStudents.length > 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2.5">
                 {searchedStudents.map(s => {
-                  const totalWinsCount = s.stats?.wins ? Object.values(s.stats.wins).reduce((a, b) => a + b, 0) : 0;
+                  const totalWinsCount: number = s.stats?.wins ? Object.values(s.stats.wins).reduce<number>((a, b) => a + Number(b), 0) : 0;
                   const hasStats = s.stats && (s.stats.totalPrize > 0 || totalWinsCount > 0);
 
                   return (
@@ -1482,6 +1735,29 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                           <Plus className="w-3.5 h-3.5" />
                         </button>
                       </div>
+
+                      {/* Pending Ticket Requests on Student Card */}
+                      {(() => {
+                        const sPending = pendingTicketRequests.filter(r => r.studentId === s.id || r.studentName === s.name);
+                        if (sPending.length === 0) return null;
+                        const sPendingTotal = sPending.reduce((sum, r) => sum + r.amount, 0);
+                        return (
+                          <div className="bg-amber-50 border border-amber-300 rounded-xl px-2 py-1 flex items-center justify-between gap-1 animate-pulse">
+                            <span className="text-[11px] font-black text-amber-800 flex items-center gap-1 truncate">
+                              <Ticket className="w-3 h-3 text-amber-600 shrink-0" />
+                              요청 +{sPendingTotal}장
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => approveRequestsForStudent(s.id, s.name)}
+                              className="px-2 py-0.5 bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black rounded-lg transition-all shadow-2xs shrink-0 cursor-pointer active:scale-95"
+                              title="이 학생의 요청 즉시 승인"
+                            >
+                              승인
+                            </button>
+                          </div>
+                        );
+                      })()}
                       
                       {/* Card Footer: Cumulative Stats (if exists) */}
                       {hasStats && (
@@ -1868,9 +2144,13 @@ function StudentView({ studentName, students, entries, gameState }: {
   entries: Entry[], 
   gameState: GameState | null 
 }) {
+  const actualEntries = useMemo(() => {
+    return entries.filter(e => !isTicketRequestEntry(e));
+  }, [entries]);
+
   const myEntries = useMemo(() => {
-    return entries.filter(e => e.studentName === studentName);
-  }, [entries, studentName]);
+    return actualEntries.filter(e => e.studentName === studentName);
+  }, [actualEntries, studentName]);
 
   const myStudent = useMemo(() => {
     return students.find(s => s.name === studentName);
@@ -1885,8 +2165,19 @@ function StudentView({ studentName, students, entries, gameState }: {
   const filteredEntries = useMemo(() => {
     if (!myStudent) return [];
     const adminEmail = myStudent.adminEmail || "fosvmd@gmail.com";
-    return entries.filter(e => e.adminEmail === adminEmail || (!e.adminEmail && adminEmail === "fosvmd@gmail.com"));
-  }, [entries, myStudent]);
+    return actualEntries.filter(e => e.adminEmail === adminEmail || (!e.adminEmail && adminEmail === "fosvmd@gmail.com"));
+  }, [actualEntries, myStudent]);
+
+  const myPendingRequests = useMemo(() => {
+    return entries
+      .filter(isTicketRequestEntry)
+      .map(parseTicketRequest)
+      .filter((r): r is TicketRequest => r !== null && r.studentName === studentName && r.status === 'pending');
+  }, [entries, studentName]);
+
+  const myPendingTickets = useMemo(() => {
+    return myPendingRequests.reduce((sum, r) => sum + r.amount, 0);
+  }, [myPendingRequests]);
 
   const ticketsTotal = myStudent?.tickets || 1;
   const ticketsLeft = ticketsTotal - myEntries.length;
@@ -1897,6 +2188,38 @@ function StudentView({ studentName, students, entries, gameState }: {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalConfig, setModalConfig] = useState<{ title: string, content: string } | null>(null);
+
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestAmount, setRequestAmount] = useState(1);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+
+  const handleRequestTickets = async () => {
+    if (!myStudent) return;
+    try {
+      setIsSubmittingRequest(true);
+      const adminEmail = myStudent.adminEmail || "fosvmd@gmail.com";
+      await addDoc(collection(db, 'entries'), {
+        uid: myStudent.id,
+        studentName,
+        picks: ['__TICKET_REQ__', String(requestAmount), 'pending', String(Date.now()), 'EXTRA'],
+        timestamp: Date.now(),
+        adminEmail
+      });
+      setIsRequestModalOpen(false);
+      setRequestAmount(1);
+      soundEngine.playTick();
+      setModalConfig({
+        title: "추가구매 요청 완료!",
+        content: `선생님께 응모권 ${requestAmount}장 추가구매를 요청했습니다. 선생님이 승인하면 응모권이 즉시 지급됩니다.`
+      });
+      setIsModalOpen(true);
+    } catch (err: any) {
+      console.error("Ticket request error:", err);
+      alert("추가구매 요청 중 오류가 발생했습니다: " + (err?.message || err));
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
 
   const submitEntry = async () => {
     if (selectedNames.length !== 5 || !myStudent) return;
@@ -1963,22 +2286,6 @@ function StudentView({ studentName, students, entries, gameState }: {
             gameState={gameState} 
             myEntries={myEntries} 
           />
-
-          <Modal 
-            isOpen={isModalOpen} 
-            onClose={() => setIsModalOpen(false)} 
-            title={modalConfig?.title || ""}
-            footer={
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold"
-              >
-                확인
-              </button>
-            }
-          >
-            <p className="text-slate-600 font-medium">{modalConfig?.content}</p>
-          </Modal>
           
           {showWinPopup && winInfo && (
             <motion.div 
@@ -2038,13 +2345,28 @@ function StudentView({ studentName, students, entries, gameState }: {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">보유 응모권</p>
-                <p className="text-2xl font-black text-slate-900">{ticketsTotal}장</p>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">보유 응모권</p>
+                  <p className="text-2xl font-black text-slate-900">{ticketsTotal}장</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="mt-2 text-xs font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-200/60 transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  추가구매 요청
+                </button>
               </div>
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">남은 응모 횟수</p>
-                <p className="text-2xl font-black text-indigo-600">{ticketsLeft}회</p>
+              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex flex-col justify-between">
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">남은 응모 횟수</p>
+                  <p className="text-2xl font-black text-indigo-600">{ticketsLeft}회</p>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2 font-medium">
+                  {myEntries.length}회 응모 완료
+                </p>
               </div>
               <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 col-span-2">
                 <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">나의 총 누적 상금</p>
@@ -2053,6 +2375,31 @@ function StudentView({ studentName, students, entries, gameState }: {
                   <Trophy className="w-6 h-6 text-emerald-500" />
                 </div>
               </div>
+
+              {myPendingTickets > 0 && (
+                <div className="col-span-2 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-center justify-between gap-3 animate-pulse">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+                      <Clock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-amber-900">
+                        추가구매 승인 대기 중 (+{myPendingTickets}장)
+                      </p>
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        선생님이 확인 후 승인하면 응모권이 지급되어 추가 응모할 수 있습니다.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsRequestModalOpen(true)}
+                    className="px-2.5 py-1.5 bg-amber-200/80 hover:bg-amber-300 text-amber-900 text-xs font-black rounded-xl transition-all shrink-0 cursor-pointer"
+                  >
+                    더 요청
+                  </button>
+                </div>
+              )}
             </div>
 
             {myStudent?.stats && (myStudent.stats.totalPrize > 0 || Object.keys(myStudent.stats.wins).length > 0) && (
@@ -2118,7 +2465,7 @@ function StudentView({ studentName, students, entries, gameState }: {
                 className={cn(
                   "w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl",
                   selectedNames.length === 5
-                    ? "bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700"
+                    ? "bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700 cursor-pointer"
                     : "bg-slate-100 text-slate-300 cursor-not-allowed shadow-none"
                 )}
               >
@@ -2132,6 +2479,35 @@ function StudentView({ studentName, students, entries, gameState }: {
               </div>
               <h3 className="text-2xl font-black mb-2">응모 완료!</h3>
               <p className="text-indigo-100 font-medium">추첨이 시작될 때까지 잠시만 기다려주세요.</p>
+
+              {/* Additional Ticket Request CTA */}
+              <div className="mt-6 pt-6 border-t border-indigo-500/50 flex flex-col items-center">
+                {myPendingTickets > 0 ? (
+                  <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20 text-center max-w-md w-full animate-pulse">
+                    <p className="text-sm font-black text-amber-300 flex items-center justify-center gap-1.5">
+                      <Clock className="w-4 h-4" />
+                      추가구매 승인 대기 중 (+{myPendingTickets}장)
+                    </p>
+                    <p className="text-xs text-indigo-100 mt-1">
+                      선생님이 승인하면 번호 선택 화면이 즉시 다시 나타납니다.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-3">
+                    <p className="text-sm text-indigo-100 font-medium">
+                      응모권을 추가로 구매하여 더 많은 번호를 응모하시겠습니까?
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsRequestModalOpen(true)}
+                      className="px-6 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-2xl shadow-lg transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
+                    >
+                      <Plus className="w-4 h-4" />
+                      응모권 추가구매 요청하기
+                    </button>
+                  </div>
+                )}
+              </div>
             </section>
           )}
 
@@ -2160,6 +2536,119 @@ function StudentView({ studentName, students, entries, gameState }: {
           )}
         </div>
       )}
+
+      {/* Alert / Notification Modal */}
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        title={modalConfig?.title || ""}
+        footer={
+          <button 
+            type="button"
+            onClick={() => setIsModalOpen(false)} 
+            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold cursor-pointer"
+          >
+            확인
+          </button>
+        }
+      >
+        <p className="text-slate-600 font-medium">{modalConfig?.content}</p>
+      </Modal>
+
+      {/* Ticket Request Modal */}
+      <Modal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        title="응모권 추가구매 요청"
+        footer={
+          <div className="flex gap-2 w-full">
+            <button
+              type="button"
+              onClick={() => setIsRequestModalOpen(false)}
+              className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all cursor-pointer"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              disabled={isSubmittingRequest}
+              onClick={handleRequestTickets}
+              className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black shadow-lg shadow-indigo-200 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isSubmittingRequest ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  요청 중...
+                </>
+              ) : (
+                <>
+                  <Ticket className="w-4 h-4" />
+                  {requestAmount}장 요청하기
+                </>
+              )}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-5 text-center py-2">
+          <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center mx-auto shadow-sm">
+            <Ticket className="w-8 h-8" />
+          </div>
+          
+          <div>
+            <h4 className="text-lg font-black text-slate-900">
+              몇 장의 응모권을 요청할까요?
+            </h4>
+            <p className="text-xs text-slate-500 mt-1">
+              선생님께 추가구매를 요청하며, 선생님이 승인하면 즉시 응모권이 지급됩니다.
+            </p>
+          </div>
+
+          {/* Stepper */}
+          <div className="flex items-center justify-center gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+            <button
+              type="button"
+              onClick={() => setRequestAmount(prev => Math.max(1, prev - 1))}
+              disabled={requestAmount <= 1}
+              className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-all shadow-xs disabled:opacity-30 cursor-pointer active:scale-95"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+
+            <span className="text-3xl font-black text-indigo-600 min-w-[70px]">
+              {requestAmount}장
+            </span>
+
+            <button
+              type="button"
+              onClick={() => setRequestAmount(prev => Math.min(10, prev + 1))}
+              disabled={requestAmount >= 10}
+              className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-600 hover:bg-slate-100 hover:text-indigo-600 transition-all shadow-xs disabled:opacity-30 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Quick presets */}
+          <div className="flex items-center justify-center gap-2">
+            {[1, 2, 3, 5].map(amt => (
+              <button
+                key={amt}
+                type="button"
+                onClick={() => setRequestAmount(amt)}
+                className={cn(
+                  "px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border",
+                  requestAmount === amt
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-xs font-black"
+                    : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
+                )}
+              >
+                +{amt}장
+              </button>
+            ))}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

@@ -136,7 +136,7 @@ class SoundEngine {
 
   // --- Step / Tick Sounds (Called during rolling animation) ---
 
-  public playTick(effect: string) {
+  public playTick(effect: string = 'standard') {
     const ctx = this.getContext();
     if (!ctx) return;
 
@@ -278,7 +278,7 @@ class SoundEngine {
 
   // --- Winning / Determination Sounds (Called when winner is revealed) ---
 
-  public playWin(effect: string) {
+  public playWin(effect: string = 'standard') {
     this.stopTick(effect);
     const ctx = this.getContext();
     if (!ctx) return;
