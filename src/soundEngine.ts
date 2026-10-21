@@ -73,17 +73,31 @@ class SoundEngine {
     osc.stop(t + duration + 0.05);
   }
 
-  // Noise Buffer (White/Filtered Noise)
-  private createNoiseBuffer(duration = 0.5): AudioBuffer | null {
+  private cachedNoiseBuffer: AudioBuffer | null = null;
+  private lastSoundTimes: Record<string, number> = {};
+
+  private canPlaySound(key: string, cooldownMs: number): boolean {
+    const now = performance.now();
+    const last = this.lastSoundTimes[key] || 0;
+    if (now - last < cooldownMs) return false;
+    this.lastSoundTimes[key] = now;
+    return true;
+  }
+
+  // Noise Buffer (Cached White Noise to avoid main-thread allocation lag)
+  private createNoiseBuffer(_duration = 0.5): AudioBuffer | null {
     const ctx = this.getContext();
     if (!ctx) return null;
-    const bufferSize = Math.floor(ctx.sampleRate * duration);
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const output = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      output[i] = Math.random() * 2 - 1;
+    if (!this.cachedNoiseBuffer) {
+      const bufferSize = Math.floor(ctx.sampleRate * 2.0);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+      this.cachedNoiseBuffer = buffer;
     }
-    return buffer;
+    return this.cachedNoiseBuffer;
   }
 
   // Play filtered noise burst (Explosion, Card whoosh, Box shake, etc.)
@@ -179,17 +193,20 @@ class SoundEngine {
 
   // Marble collision bounce sound (called when marble hits pegs/walls)
   public playMarbleBounce(volume = 0.15) {
+    if (!this.canPlaySound('bounce', 55)) return;
     const pitch = 900 + Math.random() * 700;
     this.playTone(pitch, 'sine', 0.025, 0, Math.min(0.3, volume), pitch * 0.6);
   }
 
   // Marble explosion warning beep
   public playBombWarning() {
+    if (!this.canPlaySound('bombWarn', 90)) return;
     this.playTone(880, 'square', 0.05, 0, 0.18);
   }
 
   // Marble explosion blast sound
   public playExplosionBlast() {
+    if (!this.canPlaySound('blast', 120)) return;
     // 1. Noise shockwave
     this.playNoise(0.6, 'lowpass', 600, 0, 0.7);
     // 2. Sub-bass boom
@@ -199,6 +216,7 @@ class SoundEngine {
 
   // Slow-mo cinematic overtake whoosh
   public playSlowMoWhoosh() {
+    if (!this.canPlaySound('slowmo', 300)) return;
     this.playNoise(0.8, 'lowpass', 350, 0, 0.6);
     this.playTone(280, 'sine', 0.7, 0, 0.45, 60);
     // Heartbeat thud
@@ -207,23 +225,27 @@ class SoundEngine {
 
   // Speed boost pad sound
   public playBoostPad() {
+    if (!this.canPlaySound('boost', 120)) return;
     this.playTone(520, 'triangle', 0.15, 0, 0.3, 1400);
   }
 
   // Wormhole teleport sound
   public playWarpSound() {
+    if (!this.canPlaySound('warp', 120)) return;
     this.playTone(750, 'sine', 0.2, 0, 0.35, 1800);
     this.playTone(1100, 'sine', 0.25, 0.08, 0.3, 500);
   }
 
   // Ice freeze sound (crystal crack ping)
   public playFreeze() {
+    if (!this.canPlaySound('freeze', 120)) return;
     this.playTone(2100, 'sine', 0.25, 0, 0.35, 2900);
     this.playTone(3200, 'triangle', 0.2, 0.04, 0.25, 1800);
   }
 
   // Ice shatter sound (glass/ice crystal shatter)
   public playIceShatter() {
+    if (!this.canPlaySound('shatter', 120)) return;
     this.playNoise(0.22, 'highpass', 2400, 0, 0.35);
     this.playTone(1600, 'triangle', 0.15, 0, 0.28, 600);
     this.playTone(2400, 'sine', 0.12, 0.05, 0.2, 800);
@@ -231,6 +253,7 @@ class SoundEngine {
 
   // Blizzard howling wind gust
   public playBlizzardHowl() {
+    if (!this.canPlaySound('blizzard', 500)) return;
     this.playNoise(1.2, 'bandpass', 450, 0, 0.35);
     this.playTone(280, 'sine', 1.0, 0, 0.2, 180);
   }

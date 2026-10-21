@@ -48,6 +48,7 @@ import {
   Flame,
   Crown,
   Wind,
+  Zap,
   Search,
   X
 } from 'lucide-react';
@@ -102,6 +103,7 @@ interface GameState {
   prizeCriteria: PrizeCriteria[];
   drawEffect?: 'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble';
   marbleMapTheme?: MapTheme;
+  drawSpeed?: number;
   currentDrawn?: string[];
   theme?: {
     primaryColor: string;
@@ -726,6 +728,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
   const [numWinners, setNumWinners] = useState(gameState?.numWinners || 5);
   const [drawEffect, setDrawEffect] = useState<'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble'>(gameState?.drawEffect || 'board');
   const [marbleMapTheme, setMarbleMapTheme] = useState<MapTheme>(gameState?.marbleMapTheme || 'cosmic');
+  const [drawSpeed, setDrawSpeed] = useState<number>(gameState?.drawSpeed || 1);
   const [primaryColor, setPrimaryColor] = useState(gameState?.theme?.primaryColor || '#f59e0b');
   const [backgroundColor, setBackgroundColor] = useState(gameState?.theme?.backgroundColor || '#0f172a');
   const [schoolLogoUrl, setSchoolLogoUrl] = useState(gameState?.theme?.schoolLogoUrl || '');
@@ -757,6 +760,9 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       if (gameState.marbleMapTheme) {
         setMarbleMapTheme(gameState.marbleMapTheme);
       }
+      if (gameState.drawSpeed) {
+        setDrawSpeed(gameState.drawSpeed);
+      }
       if (gameState.prizeCriteria) {
         setPrizeCriteria(gameState.prizeCriteria);
       }
@@ -776,6 +782,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       numWinners,
       drawEffect,
       marbleMapTheme,
+      drawSpeed,
       prizeCriteria,
       theme: {
         primaryColor,
@@ -1517,7 +1524,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               <div className="space-y-8">
                 <div>
                   <label className="block text-sm font-bold text-slate-600 uppercase tracking-wider mb-3">추첨 시스템 기본 설정</label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
                     <div>
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3">추첨 인원 ({numWinners}명)</label>
                       <div className="flex items-center gap-4 h-12">
@@ -1533,6 +1540,32 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                     </div>
 
                     <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase">룰렛 / 추첨 배속 ({drawSpeed}x)</label>
+                        <span className="text-[10px] text-amber-500 font-bold flex items-center gap-0.5">
+                          <Zap className="w-3 h-3" /> 속도 조절
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 h-12">
+                        {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
+                          <button
+                            key={spd}
+                            type="button"
+                            onClick={() => setDrawSpeed(spd)}
+                            className={cn(
+                              "flex-1 h-9 rounded-xl text-xs font-black transition-all border",
+                              drawSpeed === spd
+                                ? "bg-amber-400 text-slate-950 border-amber-500 shadow-sm font-black"
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                            )}
+                          >
+                            {spd}x
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="md:col-span-3">
                       <div className="flex items-center justify-between mb-3">
                         <label className="block text-[10px] font-bold text-slate-400 uppercase">추첨 효과 애니메이션 (클릭 시 효과음 미리듣기)</label>
                         <span className="text-[10px] text-indigo-500 font-bold flex items-center gap-1">
@@ -2284,6 +2317,27 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
   const [isAnimating, setIsAnimating] = useState(false);
   const [currentCandidate, setCurrentCandidate] = useState('');
   const [showFlash, setShowFlash] = useState(false);
+  const [drawSpeed, setDrawSpeed] = useState<number>(gameState.drawSpeed || 1);
+  const drawSpeedRef = useRef<number>(gameState.drawSpeed || 1);
+
+  // Sync speed state
+  useEffect(() => {
+    if (gameState.drawSpeed) {
+      setDrawSpeed(gameState.drawSpeed);
+      drawSpeedRef.current = gameState.drawSpeed;
+    }
+  }, [gameState.drawSpeed]);
+
+  const changeSpeed = (speed: number) => {
+    setDrawSpeed(speed);
+    drawSpeedRef.current = speed;
+    if (isAdmin && adminEmail) {
+      setDoc(doc(db, 'gameState', adminEmail), {
+        ...gameState,
+        drawSpeed: speed
+      }, { merge: true });
+    }
+  };
 
   // Sync drawn state with Firestore updates
   useEffect(() => {
@@ -2382,9 +2436,14 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
     unlockAudio();
     setIsAnimating(true);
     
-    // Rolling animation
+    // Rolling animation (scales speed with drawSpeedRef.current)
     let counter = 0;
-    const maxCounter = effect === 'slot' ? 40 : (effect === 'box' ? 35 : 25);
+    const curSpeed = drawSpeedRef.current;
+    const baseInterval = effect === 'slot' ? 50 : 100;
+    const stepInterval = Math.max(16, Math.round(baseInterval / (curSpeed >= 2 ? curSpeed * 0.75 : curSpeed)));
+    const baseMaxCounter = effect === 'slot' ? 40 : (effect === 'box' ? 35 : 25);
+    const maxCounter = Math.max(6, Math.round(baseMaxCounter / (curSpeed >= 2 ? curSpeed * 0.85 : (curSpeed < 1 ? curSpeed : 1))));
+
     intervalRef.current = setInterval(() => {
       const remaining = students.filter(s => !drawn.some(d => isItemMatched(d, s.name)));
       const random = remaining[Math.floor(Math.random() * remaining.length)];
@@ -2416,7 +2475,8 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
           colors: ['#fbbf24', '#f59e0b', '#ffffff', '#3b82f6']
         });
 
-        // Show the name for 2 seconds before adding to drawn list
+        // Show the name before adding to drawn list (scaled by speed)
+        const revealPause = Math.max(450, Math.round(2000 / curSpeed));
         setTimeout(() => {
           const newDrawn = [...drawn.filter(d => !isItemMatched(d, final.name)), final.name];
           setDrawn(newDrawn);
@@ -2475,6 +2535,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
               recordStats();
             }
 
+            const finishedWait = Math.max(600, Math.round(2500 / curSpeed));
             setTimeout(() => {
               setDoc(doc(db, 'gameState', adminEmail), {
                 ...gameState,
@@ -2482,11 +2543,11 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                 winningNumbers: newDrawn,
                 currentDrawn: newDrawn
               });
-            }, 2500);
+            }, finishedWait);
           }
-        }, 2000);
+        }, revealPause);
       }
-    }, effect === 'slot' ? 50 : 100);
+    }, stepInterval);
   };
 
   return (
@@ -2554,7 +2615,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
             <Sparkles style={{ color: gameState?.theme?.primaryColor || '#fbbf24' }} className="w-8 h-8" />
           </motion.h2>
 
-          <div className="mb-8 flex flex-col items-center gap-2">
+          <div className="mb-8 flex flex-wrap items-center justify-center gap-3">
             {!audioUnlocked && (
               <button 
                 onClick={unlockAudio}
@@ -2565,6 +2626,28 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
               </button>
             )}
             {audioUnlocked && <p className="text-[10px] text-green-500 uppercase tracking-widest font-bold flex items-center gap-1">Audio Ready <CheckCircle2 className="w-2 h-2" /></p>}
+
+            {/* Live Roulette / Drawing Speed Multiplier Bar */}
+            <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-2xl border border-slate-800 shadow-lg">
+              <Zap className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[11px] font-black text-slate-300 mr-1">배속</span>
+              {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
+                <button
+                  key={spd}
+                  type="button"
+                  onClick={() => changeSpeed(spd)}
+                  className={cn(
+                    "px-2 py-0.5 rounded-lg text-xs font-black transition-all",
+                    drawSpeed === spd
+                      ? "bg-amber-400 text-slate-950 shadow-sm font-black scale-105"
+                      : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  )}
+                  title={`추첨 배속 ${spd}x 설정`}
+                >
+                  {spd}x
+                </button>
+              ))}
+            </div>
           </div>
 
           {effect === 'marble' ? (
@@ -2574,6 +2657,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                 numWinners={gameState.numWinners || 5}
                 primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
                 initialMapTheme={gameState?.marbleMapTheme || 'cosmic'}
+                initialSpeed={drawSpeed}
                 onWinnerDetermined={(winnerName, rank) => {
                   setDrawn(prev => {
                     const newDrawn = [...prev.filter(n => !isItemMatched(n, winnerName)), winnerName];
