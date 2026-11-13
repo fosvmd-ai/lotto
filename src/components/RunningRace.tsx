@@ -19,6 +19,16 @@ interface RunningRaceProps {
 
 type RaceMode = 'first' | 'last';
 type RacePhase = 'ready' | 'countdown' | 'racing' | 'finished';
+type WeatherType = 'none' | 'lightning' | 'wind' | 'rain' | 'snow' | 'random';
+
+const WEATHER_PRESETS: { id: WeatherType; label: string; icon: string }[] = [
+  { id: 'none', label: '맑음', icon: '☀️' },
+  { id: 'lightning', label: '벼락', icon: '⚡' },
+  { id: 'wind', label: '강풍', icon: '💨' },
+  { id: 'rain', label: '폭우', icon: '🌧️' },
+  { id: 'snow', label: '폭설', icon: '❄️' },
+  { id: 'random', label: '랜덤', icon: '🎲' },
+];
 
 const TRACK_LENGTH_PRESETS = [
   { label: '더 짧게', value: 900 },
@@ -28,7 +38,7 @@ const TRACK_LENGTH_PRESETS = [
   { label: '마라톤', value: 12000 },
 ];
 
-type ObstacleType = 'hurdle' | 'tire' | 'puddle' | 'cone';
+type ObstacleType = 'hurdle' | 'tire' | 'puddle' | 'cone' | 'ice';
 
 interface TrackObstacle {
   id: string;
@@ -52,7 +62,7 @@ interface Runner {
   tripTimer: number;
   color: string;
   hairColor: string;
-  gimmick: 'none' | 'spurt' | 'superSpurt' | 'stumble' | 'longStop';
+  gimmick: 'none' | 'spurt' | 'superSpurt' | 'stumble' | 'longStop' | 'shock' | 'windPush' | 'iceSlip';
   gimmickTimer: number;
   bubbleText: string;
   bubbleTimer: number;
@@ -101,6 +111,7 @@ export default function RunningRace({
 
   const [raceMode, setRaceMode] = useState<RaceMode>('first');
   const [trackLength, setTrackLength] = useState<number>(5200);
+  const [weatherMode, setWeatherMode] = useState<WeatherType>('none');
   const [phase, setPhase] = useState<RacePhase>('ready');
   const [countdownText, setCountdownText] = useState<string>('');
   const [isMuted, setIsMuted] = useState(false);
@@ -129,12 +140,20 @@ export default function RunningRace({
   const trackLengthRef = useRef<number>(trackLength);
   trackLengthRef.current = trackLength;
 
+  const weatherModeRef = useRef<WeatherType>(weatherMode);
+  weatherModeRef.current = weatherMode;
+
   const phaseRef = useRef<RacePhase>(phase);
   phaseRef.current = phase;
 
   const runnersRef = useRef<Runner[]>([]);
   const obstaclesRef = useRef<TrackObstacle[]>([]);
   const particlesRef = useRef<Particle[]>([]);
+  const lightningStrikesRef = useRef<{ x: number; y: number; timer: number }[]>([]);
+  const weatherDropsRef = useRef<{ x: number; y: number; speed: number; size: number }[]>([]);
+  const windGustTimerRef = useRef<number>(0);
+  const activeRandomWeatherRef = useRef<'lightning' | 'wind' | 'rain' | 'snow'>('rain');
+  const lastRandomWeatherSwitchRef = useRef<number>(0);
   const cameraRef = useRef<{ x: number; y: number; zoom: number; pivotX: number; pivotY: number }>({
     x: 0,
     y: 0,
@@ -159,7 +178,15 @@ export default function RunningRace({
   const HEADER_HEIGHT = 98; // Sky + bleachers + bunting
 
   const generateObstacles = useCallback((laneCount: number, finishX: number) => {
-    const types: ObstacleType[] = ['hurdle', 'tire', 'puddle', 'cone'];
+    const w = weatherModeRef.current;
+    const baseTypes: ObstacleType[] =
+      w === 'rain'
+        ? ['puddle', 'puddle', 'hurdle', 'cone']
+        : w === 'snow'
+          ? ['ice', 'ice', 'tire', 'hurdle']
+          : w === 'random'
+            ? ['hurdle', 'tire', 'puddle', 'cone', 'ice']
+            : ['hurdle', 'tire', 'puddle', 'cone'];
     const obs: TrackObstacle[] = [];
     const usableSpan = Math.max(400, finishX - START_X - 460);
     const countPerLane = Math.max(3, Math.round(usableSpan / 430));
@@ -168,7 +195,7 @@ export default function RunningRace({
       for (let k = 0; k < countPerLane; k++) {
         const segment = usableSpan / countPerLane;
         const ox = START_X + 250 + k * segment + (Math.random() * 0.6 + 0.2) * segment;
-        const type = types[Math.floor(Math.random() * types.length)];
+        const type = baseTypes[Math.floor(Math.random() * baseTypes.length)];
         obs.push({
           id: `obs-${lane}-${k}`,
           lane,
@@ -208,6 +235,14 @@ export default function RunningRace({
     }));
     generateObstacles(shuffled.length, getFinishX());
     particlesRef.current = [];
+    lightningStrikesRef.current = [];
+    weatherDropsRef.current = Array.from({ length: 70 }, () => ({
+      x: Math.random() * 1400,
+      y: Math.random() * 750,
+      speed: 3 + Math.random() * 4,
+      size: 2 + Math.random() * 3,
+    }));
+    windGustTimerRef.current = 0;
     cameraRef.current = { x: 0, y: 0, zoom: 1, pivotX: 0.5, pivotY: 0.5 };
     tapeBrokenRef.current = false;
     finishedCountRef.current = 0;
@@ -236,7 +271,7 @@ export default function RunningRace({
     if (phaseRef.current === 'ready') {
       generateObstacles(runnersRef.current.length, trackLength);
     }
-  }, [trackLength, generateObstacles]);
+  }, [trackLength, weatherMode, generateObstacles]);
 
   // Auto-proceed countdown for the final standings popup
   useEffect(() => {
@@ -393,6 +428,21 @@ export default function RunningRace({
         ctx.ellipse(0, 13, 18, 6, 0, 0, Math.PI * 2);
         ctx.fill();
         ctx.stroke();
+      } else if (obs.type === 'ice') {
+        ctx.fillStyle = 'rgba(186, 230, 253, 0.88)';
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect(-18, 6, 36, 12, 6);
+        ctx.fill();
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.beginPath();
+        ctx.moveTo(-10, 10);
+        ctx.lineTo(-2, 14);
+        ctx.moveTo(4, 9);
+        ctx.lineTo(12, 13);
+        ctx.stroke();
       } else if (obs.type === 'tire') {
         if (obs.knocked) ctx.rotate(0.65);
         ctx.fillStyle = '#1e293b';
@@ -449,7 +499,7 @@ export default function RunningRace({
       ctx.restore();
     };
 
-    const drawRunner = (r: Runner, screenX: number, screenY: number, isLeader: boolean, laneHeight: number) => {
+    const drawRunner = (r: Runner, screenX: number, screenY: number, isLeader: boolean, laneHeight: number, now: number) => {
       const scale = Math.max(0.58, Math.min(1, laneHeight / 38));
       ctx.save();
       ctx.translate(screenX, screenY);
@@ -489,11 +539,15 @@ export default function RunningRace({
 
       const swing = r.vx > 0.1 ? Math.sin(r.phase) : 0;
       const stumbleTilt =
-        r.tripTimer > 0
-          ? 0.55 + Math.sin(r.tripTimer * 0.5) * 0.25
-          : r.gimmick === 'stumble'
-            ? Math.sin(r.phase * 2) * 0.35
-            : 0;
+        r.gimmick === 'windPush'
+          ? -0.35
+          : r.gimmick === 'shock'
+            ? Math.sin(now * 0.08) * 0.18
+            : r.tripTimer > 0
+              ? 0.55 + Math.sin(r.tripTimer * 0.5) * 0.25
+              : r.gimmick === 'stumble' || r.gimmick === 'iceSlip'
+                ? Math.sin(r.phase * 2) * 0.35
+                : 0;
 
       ctx.save();
       ctx.rotate(stumbleTilt);
@@ -510,7 +564,8 @@ export default function RunningRace({
       ctx.stroke();
 
       // Torso (Jersey)
-      ctx.fillStyle = r.color;
+      const isShockedFlash = r.gimmick === 'shock' && Math.floor(now / 60) % 2 === 0;
+      ctx.fillStyle = isShockedFlash ? '#fde047' : r.color;
       ctx.beginPath();
       ctx.roundRect(-7, -7, 14, 15, 5);
       ctx.fill();
@@ -540,8 +595,21 @@ export default function RunningRace({
       ctx.arc(0, -15, 8, Math.PI, Math.PI * 2);
       ctx.fill();
 
-      // Sweat drops if stumbling or long-stopped
-      if (r.gimmick === 'stumble' || r.gimmick === 'longStop') {
+      // Electric sparks when shocked by lightning
+      if (r.gimmick === 'shock') {
+        ctx.strokeStyle = '#fde047';
+        ctx.lineWidth = 2;
+        for (let s = 0; s < 4; s++) {
+          const ang = (now * 0.015 + s * Math.PI * 0.5);
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(ang) * 10, Math.sin(ang) * 10);
+          ctx.lineTo(Math.cos(ang + 0.3) * 19, Math.sin(ang + 0.3) * 19);
+          ctx.stroke();
+        }
+      }
+
+      // Sweat drops if stumbling, long-stopped, or slipping
+      if (r.gimmick === 'stumble' || r.gimmick === 'longStop' || r.gimmick === 'iceSlip') {
         ctx.fillStyle = r.gimmick === 'longStop' ? '#a855f7' : '#38bdf8';
         ctx.beginPath();
         ctx.arc(-10, -16, 2.5, 0, Math.PI * 2);
@@ -607,7 +675,13 @@ export default function RunningRace({
               ? '#0284c7'
               : r.gimmick === 'longStop'
                 ? '#7c3aed'
-                : '#e11d48';
+                : r.gimmick === 'shock'
+                  ? '#ca8a04'
+                  : r.gimmick === 'windPush'
+                    ? '#0284c7'
+                    : r.gimmick === 'iceSlip'
+                      ? '#0891b2'
+                      : '#e11d48';
         ctx.beginPath();
         ctx.roundRect(bx, by, bw, bh, 8);
         ctx.fill();
@@ -680,6 +754,27 @@ export default function RunningRace({
         const timeScale = slowFactor * speedRef.current;
         const step = dt * 60 * timeScale;
 
+        // Determine active weather
+        let activeWeather: WeatherType = weatherModeRef.current;
+        if (activeWeather === 'random') {
+          if (now - lastRandomWeatherSwitchRef.current > 4200) {
+            lastRandomWeatherSwitchRef.current = now;
+            const pool: ('lightning' | 'wind' | 'rain' | 'snow')[] = ['lightning', 'wind', 'rain', 'snow'];
+            activeRandomWeatherRef.current = pool[Math.floor(Math.random() * pool.length)];
+          }
+          activeWeather = activeRandomWeatherRef.current;
+        }
+
+        if (windGustTimerRef.current > 0) {
+          windGustTimerRef.current = Math.max(0, windGustTimerRef.current - step);
+        } else if (activeWeather === 'wind' && unfinished.length > 0 && Math.random() < 0.008 * step) {
+          windGustTimerRef.current = 95;
+          if (now - lastCommentaryTimeRef.current > 900) {
+            lastCommentaryTimeRef.current = now;
+            setCommentary(`💨 강풍 주의보! 거센 맞바람이 불어 주자들이 뒤로 밀려납니다!`);
+          }
+        }
+
         const sortedUnfinishedList = [...unfinished].sort((a, b) => b.x - a.x);
         const leaderX = sortedUnfinishedList[0]?.x || START_X;
 
@@ -691,14 +786,62 @@ export default function RunningRace({
           const isTrailingPack = unfinished.length > 2 && rankIdx >= Math.floor(unfinished.length * 0.45);
           const isTopPack = unfinished.length > 2 && rankIdx <= Math.max(1, Math.floor(unfinished.length * 0.25));
 
-          // Trigger dynamic comeback / collapse / random gimmicks
+          // Trigger dynamic comeback / collapse / weather / random gimmicks
           if (r.gimmickTimer > 0) {
             r.gimmickTimer -= step;
             if (r.gimmickTimer <= 0) {
               r.gimmick = 'none';
             }
           } else if (r.x > START_X + 110 && r.x < FINISH_X - 130) {
-            if (isTrailingPack && gapFromLeader > 85 && Math.random() < 0.0115 * step) {
+            // Weather-specific events
+            if (activeWeather === 'lightning' && Math.random() < 0.0055 * step) {
+              r.gimmick = 'shock';
+              r.gimmickTimer = 80;
+              r.vx = 0;
+              r.bubbleText = '찌릿! 감전!';
+              r.bubbleTimer = 80;
+              lightningStrikesRef.current.push({
+                x: r.x,
+                y: HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58,
+                timer: 22,
+              });
+              spawnDust(r.x, HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58, '#fde047', 8);
+              if (!mutedRef.current) soundEngine.playExplosionBlast();
+              if (now - lastCommentaryTimeRef.current > 850) {
+                lastCommentaryTimeRef.current = now;
+                setCommentary(`⚡ 콰광! ${r.name} 선수에게 벼락이 떨어져 감전되었습니다!`);
+              }
+            } else if (activeWeather === 'wind' && windGustTimerRef.current > 20 && Math.random() < 0.032 * step) {
+              r.gimmick = 'windPush';
+              r.gimmickTimer = 52;
+              r.bubbleText = '뒤로 날아간다!';
+              r.bubbleTimer = 55;
+              if (!mutedRef.current) soundEngine.playBlizzardHowl();
+            } else if (activeWeather === 'rain' && Math.random() < 0.0085 * step) {
+              r.gimmick = 'stumble';
+              r.gimmickTimer = 46;
+              r.tripTimer = 32;
+              r.bubbleText = '빗길 미끄덩!';
+              r.bubbleTimer = 55;
+              spawnDust(r.x, HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58, '#38bdf8', 7);
+              if (!mutedRef.current) soundEngine.playStumble();
+              if (now - lastCommentaryTimeRef.current > 950) {
+                lastCommentaryTimeRef.current = now;
+                setCommentary(`🌧️ 폭우가 쏟아집니다! ${r.name} 선수가 빗길 물웅덩이에 미끄러졌습니다!`);
+              }
+            } else if (activeWeather === 'snow' && Math.random() < 0.0085 * step) {
+              r.gimmick = 'iceSlip';
+              r.gimmickTimer = 52;
+              r.tripTimer = 36;
+              r.bubbleText = '빙판 미끄덩!';
+              r.bubbleTimer = 60;
+              spawnDust(r.x, HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58, '#bae6fd', 7);
+              if (!mutedRef.current) soundEngine.playFreeze();
+              if (now - lastCommentaryTimeRef.current > 950) {
+                lastCommentaryTimeRef.current = now;
+                setCommentary(`❄️ 눈이 내려 빙판길! ${r.name} 선수가 얼음판에 미끄러집니다!`);
+              }
+            } else if (isTrailingPack && gapFromLeader > 85 && Math.random() < 0.0115 * step) {
               // Underdog mega-spurt comeback!
               r.gimmick = 'superSpurt';
               r.gimmickTimer = 88 + Math.random() * 35;
@@ -778,33 +921,40 @@ export default function RunningRace({
                 if (now - lastCommentaryTimeRef.current > 1100) {
                   lastCommentaryTimeRef.current = now;
                   const obsName =
-                    obs.type === 'hurdle' ? '허들' : obs.type === 'tire' ? '타이어' : obs.type === 'puddle' ? '물웅덩이' : '라바콘';
+                    obs.type === 'hurdle' ? '허들' : obs.type === 'tire' ? '타이어' : obs.type === 'puddle' ? '물웅덩이' : obs.type === 'ice' ? '빙판' : '라바콘';
                   setCommentary(`🦘 ${r.name} 선수, ${obsName}을(를) 가볍게 뛰어넘습니다!`);
                 }
               } else {
                 // Tripped / stumbled on obstacle!
                 obs.knocked = true;
-                r.gimmick = 'stumble';
+                r.gimmick = obs.type === 'ice' ? 'iceSlip' : 'stumble';
                 r.gimmickTimer = 46;
                 r.tripTimer = 30;
                 r.jumpVy = -2.4;
                 r.jumpY = -1;
                 r.vx *= 0.4;
                 const tripWords =
-                  obs.type === 'puddle' ? ['첨벙!', '미끄덩!'] : ['아야!', '걸렸다!', '꽈당!'];
+                  obs.type === 'puddle'
+                    ? ['첨벙!', '미끄덩!']
+                    : obs.type === 'ice'
+                      ? ['빙판 미끄덩!', '으악!']
+                      : ['아야!', '걸렸다!', '꽈당!'];
                 r.bubbleText = tripWords[Math.floor(Math.random() * tripWords.length)];
                 r.bubbleTimer = 55;
                 spawnDust(
                   obs.x,
                   HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58,
-                  obs.type === 'puddle' ? '#38bdf8' : '#f87171',
+                  obs.type === 'puddle' || obs.type === 'ice' ? '#38bdf8' : '#f87171',
                   6
                 );
-                if (!mutedRef.current) soundEngine.playStumble();
+                if (!mutedRef.current) {
+                  if (obs.type === 'ice') soundEngine.playFreeze();
+                  else soundEngine.playStumble();
+                }
                 if (now - lastCommentaryTimeRef.current > 1000) {
                   lastCommentaryTimeRef.current = now;
                   const obsName =
-                    obs.type === 'hurdle' ? '허들' : obs.type === 'tire' ? '타이어' : obs.type === 'puddle' ? '물웅덩이' : '라바콘';
+                    obs.type === 'hurdle' ? '허들' : obs.type === 'tire' ? '타이어' : obs.type === 'puddle' ? '물웅덩이' : obs.type === 'ice' ? '빙판' : '라바콘';
                   setCommentary(`💥 아이고! ${r.name} 선수, ${obsName}에 걸려 넘어지며 주춤합니다!`);
                 }
               }
@@ -818,11 +968,14 @@ export default function RunningRace({
           if (r.gimmick === 'superSpurt') targetVx *= 2.1;
           else if (r.gimmick === 'spurt') targetVx *= 1.58;
           else if (r.gimmick === 'stumble') targetVx *= 0.36;
+          else if (r.gimmick === 'iceSlip') targetVx *= 0.28;
           else if (r.gimmick === 'longStop') targetVx = 0.05;
+          else if (r.gimmick === 'shock') targetVx = 0;
+          else if (r.gimmick === 'windPush') targetVx = -2.5;
 
-          r.vx += (targetVx - r.vx) * Math.min(1, 0.12 * step);
-          r.x += r.vx * step;
-          r.phase += r.vx * 0.22 * step;
+          r.vx += (targetVx - r.vx) * Math.min(1, 0.14 * step);
+          r.x = Math.max(START_X, r.x + r.vx * step);
+          r.phase += Math.abs(r.vx) * 0.22 * step;
 
           if (Math.random() < 0.3 * step) {
             spawnDust(r.x, HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.55);
@@ -995,8 +1148,18 @@ export default function RunningRace({
       }
 
       // --- DRAW BACKGROUND ---
-      // Sky
-      ctx.fillStyle = '#cbe9f8';
+      // Sky (reacts to weather)
+      const visualWeather = weatherModeRef.current === 'random' ? activeRandomWeatherRef.current : weatherModeRef.current;
+      ctx.fillStyle =
+        visualWeather === 'lightning'
+          ? '#475569'
+          : visualWeather === 'rain'
+            ? '#64748b'
+            : visualWeather === 'snow'
+              ? '#bae6fd'
+              : visualWeather === 'wind'
+                ? '#94a3b8'
+                : '#cbe9f8';
       ctx.fillRect(0, 0, W, HEADER_HEIGHT);
 
       // Clouds
@@ -1186,10 +1349,75 @@ export default function RunningRace({
           ctx.stroke();
           ctx.restore();
         }
-        drawRunner(r, sx, sy, r.id === leaderId, laneHeight);
+        drawRunner(r, sx, sy, r.id === leaderId, laneHeight, now);
       }
 
       ctx.restore(); // end track clip
+
+      // Weather Canvas Effects (Lightning Bolts, Rain, Snow, Wind Streaks)
+      const renderWeather = weatherModeRef.current === 'random' ? activeRandomWeatherRef.current : weatherModeRef.current;
+      if (renderWeather === 'rain' || renderWeather === 'snow' || renderWeather === 'wind') {
+        for (const drop of weatherDropsRef.current) {
+          if (renderWeather === 'rain') {
+            drop.x -= drop.speed * 0.55;
+            drop.y += drop.speed * 2.2;
+            if (drop.y > H) { drop.y = 0; drop.x = Math.random() * W; }
+            if (drop.x < 0) drop.x = W;
+            ctx.strokeStyle = 'rgba(186, 230, 253, 0.55)';
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(drop.x % W, drop.y);
+            ctx.lineTo((drop.x % W) - 4, drop.y + 12);
+            ctx.stroke();
+          } else if (renderWeather === 'snow') {
+            drop.x += Math.sin(now * 0.002 + drop.y * 0.02) * 0.8;
+            drop.y += drop.speed * 0.42;
+            if (drop.y > H) { drop.y = 0; drop.x = Math.random() * W; }
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.beginPath();
+            ctx.arc((drop.x % W + W) % W, drop.y, drop.size, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (renderWeather === 'wind') {
+            drop.x -= drop.speed * (windGustTimerRef.current > 0 ? 5.2 : 2.6);
+            if (drop.x < 0) { drop.x = W; drop.y = Math.random() * H; }
+            ctx.strokeStyle = windGustTimerRef.current > 0 ? 'rgba(224, 242, 254, 0.65)' : 'rgba(255, 255, 255, 0.35)';
+            ctx.lineWidth = windGustTimerRef.current > 0 ? 2.5 : 1.5;
+            ctx.beginPath();
+            ctx.moveTo(drop.x, drop.y);
+            ctx.lineTo(drop.x - (windGustTimerRef.current > 0 ? 48 : 24), drop.y + 3);
+            ctx.stroke();
+          }
+        }
+      }
+
+      // Draw Jagged Lightning Bolts
+      for (let i = lightningStrikesRef.current.length - 1; i >= 0; i--) {
+        const bolt = lightningStrikesRef.current[i];
+        bolt.timer -= 1;
+        if (bolt.timer <= 0) {
+          lightningStrikesRef.current.splice(i, 1);
+          continue;
+        }
+        const bx = bolt.x - camX;
+        const by = bolt.y;
+        ctx.save();
+        ctx.strokeStyle = '#fef08a';
+        ctx.lineWidth = 4;
+        ctx.shadowColor = '#facc15';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.moveTo(bx + (Math.random() - 0.5) * 16, 0);
+        const segs = 6;
+        for (let s = 1; s < segs; s++) {
+          const sy = (by / segs) * s;
+          const sx = bx + (Math.random() - 0.5) * 28;
+          ctx.lineTo(sx, sy);
+        }
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+        ctx.restore();
+      }
+
       ctx.restore(); // end close-up camera zoom
 
       // Subtle edge vignette during close-up (non-intrusive)
@@ -1352,6 +1580,33 @@ export default function RunningRace({
                       }`}
                     >
                       {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weather Effect Selector */}
+              <div className="bg-slate-100 rounded-2xl p-3 mb-4 text-left border border-slate-200">
+                <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-2">
+                  <span>기후 효과 선택</span>
+                  <span className="text-sky-600">
+                    {WEATHER_PRESETS.find(w => w.id === weatherMode)?.icon} {WEATHER_PRESETS.find(w => w.id === weatherMode)?.label}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                  {WEATHER_PRESETS.map(w => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => setWeatherMode(w.id)}
+                      className={`py-1.5 px-1 rounded-lg text-[11px] font-bold border transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
+                        weatherMode === w.id
+                          ? 'bg-sky-500 text-white border-sky-600 shadow-xs'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      <span className="text-sm leading-none">{w.icon}</span>
+                      <span>{w.label}</span>
                     </button>
                   ))}
                 </div>
