@@ -63,7 +63,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
 import soundEngine from './soundEngine';
-import MarbleRace, { MAP_THEMES, MapTheme } from './components/MarbleRace';
+import MarbleRace, { MAP_THEMES, MapTheme, MAP_LENGTHS, MapLength } from './components/MarbleRace';
 import SlotMachineEffect from './components/effects/SlotMachineEffect';
 import SupernovaExplosionEffect from './components/effects/SupernovaExplosionEffect';
 import MythicCardEffect from './components/effects/MythicCardEffect';
@@ -139,6 +139,7 @@ interface GameState {
   prizeCriteria: PrizeCriteria[];
   drawEffect?: 'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble';
   marbleMapTheme?: MapTheme;
+  marbleMapLength?: MapLength;
   drawSpeed?: number;
   currentDrawn?: string[];
   theme?: {
@@ -764,6 +765,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
   const [numWinners, setNumWinners] = useState(gameState?.numWinners || 5);
   const [drawEffect, setDrawEffect] = useState<'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble'>(gameState?.drawEffect || 'board');
   const [marbleMapTheme, setMarbleMapTheme] = useState<MapTheme>(gameState?.marbleMapTheme || 'cosmic');
+  const [marbleMapLength, setMarbleMapLength] = useState<MapLength>(gameState?.marbleMapLength || 'medium');
   const [drawSpeed, setDrawSpeed] = useState<number>(gameState?.drawSpeed || 1);
   const [primaryColor, setPrimaryColor] = useState(gameState?.theme?.primaryColor || '#f59e0b');
   const [backgroundColor, setBackgroundColor] = useState(gameState?.theme?.backgroundColor || '#0f172a');
@@ -796,6 +798,9 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       if (gameState.marbleMapTheme) {
         setMarbleMapTheme(gameState.marbleMapTheme);
       }
+      if (gameState.marbleMapLength) {
+        setMarbleMapLength(gameState.marbleMapLength);
+      }
       if (gameState.drawSpeed) {
         setDrawSpeed(gameState.drawSpeed);
       }
@@ -818,6 +823,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       numWinners,
       drawEffect,
       marbleMapTheme,
+      marbleMapLength,
       drawSpeed,
       prizeCriteria,
       theme: {
@@ -1965,6 +1971,62 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                             </button>
                           );
                         })}
+                      </div>
+
+                      {/* Marble Race Map Length Selection */}
+                      <div className="mt-5 pt-5 border-t border-slate-800/80">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                          <div>
+                            <h5 className="text-xs font-black text-white flex items-center gap-1.5">
+                              <span>📏</span>
+                              <span>구슬 레이스 맵 길이</span>
+                            </h5>
+                            <p className="text-[11px] text-slate-400">
+                              길이에 따라 트랙 높이 및 장애물/오브젝트 수가 자동으로 조정됩니다.
+                            </p>
+                          </div>
+                          <span className="text-[11px] font-black text-emerald-400 bg-emerald-400/15 px-2.5 py-0.5 rounded-full border border-emerald-400/30 w-fit">
+                            선택됨: {MAP_LENGTHS.find(l => l.id === marbleMapLength)?.name}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2.5">
+                          {MAP_LENGTHS.map(len => {
+                            const isSelected = marbleMapLength === len.id;
+                            return (
+                              <button
+                                key={len.id}
+                                type="button"
+                                onClick={() => {
+                                  setMarbleMapLength(len.id);
+                                  soundEngine.unlockAudio().then(() => {
+                                    soundEngine.playMarbleBounce(0.4);
+                                  });
+                                }}
+                                className={cn(
+                                  "p-3 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 cursor-pointer",
+                                  isSelected
+                                    ? "bg-emerald-500/15 border-emerald-400 shadow-lg shadow-emerald-500/10"
+                                    : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
+                                )}
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm font-black text-white flex items-center gap-1.5">
+                                    <span>{len.icon}</span>
+                                    <span>{len.name}</span>
+                                  </span>
+                                  {isSelected && (
+                                    <span className="text-[10px] font-black bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full">
+                                      선택
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[10px] text-slate-300 leading-snug">
+                                  {len.desc}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
                     </motion.div>
                   )}
@@ -3146,6 +3208,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
                 numWinners={gameState.numWinners || 5}
                 primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
                 initialMapTheme={gameState?.marbleMapTheme || 'cosmic'}
+                initialMapLength={gameState?.marbleMapLength || 'medium'}
                 initialSpeed={drawSpeed}
                 onWinnerDetermined={(winnerName, rank) => {
                   setDrawn(prev => {

@@ -10,6 +10,39 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export type MapTheme = 'cosmic' | 'pinball' | 'glacier' | 'factory';
+export type MapLength = 'short' | 'medium' | 'long';
+
+export interface MapLengthInfo {
+  id: MapLength;
+  name: string;
+  icon: string;
+  height: number;
+  desc: string;
+}
+
+export const MAP_LENGTHS: MapLengthInfo[] = [
+  {
+    id: 'short',
+    name: '짧게',
+    icon: '⚡',
+    height: 2100,
+    desc: '짧고 스피디한 단거리 트랙 (장애물 축소 배치)'
+  },
+  {
+    id: 'medium',
+    name: '중간',
+    icon: '⚖️',
+    height: 3600,
+    desc: '표준 밸런스 트랙 (기본 장애물 배치)'
+  },
+  {
+    id: 'long',
+    name: '길게',
+    icon: '🏔️',
+    height: 5400,
+    desc: '대역전극이 펼쳐지는 롱 트랙 (장애물 대폭 증설)'
+  }
+];
 
 export interface MapThemeInfo {
   id: MapTheme;
@@ -192,14 +225,17 @@ interface MarbleRaceProps {
   numWinners: number;
   primaryColor?: string;
   initialMapTheme?: MapTheme;
+  initialMapLength?: MapLength;
   initialSpeed?: number;
   onWinnerDetermined: (winnerName: string, rank: number) => void;
   onRaceFinished: (winners: string[]) => void;
 }
 
 const TRACK_WIDTH = 700;
-const TRACK_HEIGHT = 3600;
-const FINISH_Y = TRACK_HEIGHT - 250;
+
+const getTrackHeightByLength = (length: MapLength): number => {
+  return MAP_LENGTHS.find(l => l.id === length)?.height || 3600;
+};
 
 // Color palette for marbles
 const MARBLE_COLORS = [
@@ -213,6 +249,7 @@ export default function MarbleRace({
   numWinners,
   primaryColor = '#fbbf24',
   initialMapTheme = 'cosmic',
+  initialMapLength = 'medium',
   initialSpeed = 1,
   onWinnerDetermined,
   onRaceFinished,
@@ -231,6 +268,8 @@ export default function MarbleRace({
   const [overtakeAlert, setOvertakeAlert] = useState<{ name: string; color: string } | null>(null);
   const [finishCountdown, setFinishCountdown] = useState<number>(30);
   const [mapTheme, setMapTheme] = useState<MapTheme>(initialMapTheme);
+  const [mapLength, setMapLength] = useState<MapLength>(initialMapLength);
+  const mapLengthRef = useRef<MapLength>(initialMapLength);
   const [speedMultiplier, setSpeedMultiplier] = useState<number>(initialSpeed);
   const speedMultiplierRef = useRef<number>(initialSpeed);
 
@@ -301,8 +340,13 @@ export default function MarbleRace({
     }
   };
 
-  // Build Obstacle Track based on selected theme
-  const initTrack = (theme: MapTheme = mapTheme) => {
+  // Build Obstacle Track based on selected theme and map length
+  const initTrack = (theme: MapTheme = mapTheme, length: MapLength = mapLengthRef.current) => {
+    const trackHeight = getTrackHeightByLength(length);
+    const finishY = trackHeight - 250;
+    const alleyTop = trackHeight - 400;
+    const funnelTop = trackHeight - 520;
+
     const pegs: Peg[] = [];
     const bumpers: Bumper[] = [];
     const ramps: Ramp[] = [];
@@ -313,23 +357,22 @@ export default function MarbleRace({
     const conveyors: ConveyorBelt[] = [];
     const iceTraps: IceTrap[] = [];
 
-    // --- Common Finale: Funnel Bottleneck & Rotating Gate Barrier (y: 3080 to FINISH_Y) ---
+    // --- Common Finale: Funnel Bottleneck & Rotating Gate Barrier ---
     const ALLEY_L = 305;
     const ALLEY_R = 395;
-    const ALLEY_TOP = 3200;
 
     // 1. Funnel Convergence Walls
-    ramps.push({ x1: 20, y1: 3080, x2: ALLEY_L, y2: ALLEY_TOP });
-    ramps.push({ x1: TRACK_WIDTH - 20, y1: 3080, x2: ALLEY_R, y2: ALLEY_TOP });
+    ramps.push({ x1: 20, y1: funnelTop, x2: ALLEY_L, y2: alleyTop });
+    ramps.push({ x1: TRACK_WIDTH - 20, y1: funnelTop, x2: ALLEY_R, y2: alleyTop });
 
     // 2. Narrow Alley Walls
-    ramps.push({ x1: ALLEY_L, y1: ALLEY_TOP, x2: ALLEY_L, y2: FINISH_Y + 50 });
-    ramps.push({ x1: ALLEY_R, y1: ALLEY_TOP, x2: ALLEY_R, y2: FINISH_Y + 50 });
+    ramps.push({ x1: ALLEY_L, y1: alleyTop, x2: ALLEY_L, y2: finishY + 50 });
+    ramps.push({ x1: ALLEY_R, y1: alleyTop, x2: ALLEY_R, y2: finishY + 50 });
 
     // 3. Rotating Gate Barrier Bar on Alley Entrance (시계 반대방향 360도 회전)
     spinners.push({
       x: ALLEY_L,
-      y: ALLEY_TOP - 5,
+      y: alleyTop - 5,
       length: 78,
       angle: 0,
       speed: -0.046,
@@ -341,8 +384,8 @@ export default function MarbleRace({
       // ==========================================
       // 🌌 MAP 1: 우주 블랙홀 & 웜홀 맵 (COSMIC)
       // ==========================================
-      // Stellar constellation peg field
-      for (let r = 0; r < 7; r++) {
+      const pegRows = length === 'short' ? 4 : length === 'long' ? 8 : 7;
+      for (let r = 0; r < pegRows; r++) {
         const y = 380 + r * 75;
         const isOdd = r % 2 === 1;
         const cols = isOdd ? 8 : 9;
@@ -355,46 +398,81 @@ export default function MarbleRace({
         }
       }
 
-      // Gravitational curved ramps
-      ramps.push({ x1: 20, y1: 1050, x2: 450, y2: 1200 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1350, x2: 250, y2: 1500 });
-      ramps.push({ x1: 20, y1: 1650, x2: 450, y2: 1800 });
+      if (length === 'short') {
+        ramps.push({ x1: 20, y1: 760, x2: 430, y2: 900 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1050, x2: 260, y2: 1190 });
 
-      // Gravity Node Bumpers
-      bumpers.push({ x: 550, y: 1150, radius: 36, pulse: 0 });
-      bumpers.push({ x: 150, y: 1450, radius: 36, pulse: 0 });
-      bumpers.push({ x: 550, y: 1750, radius: 36, pulse: 0 });
-      bumpers.push({ x: 350, y: 2650, radius: 42, pulse: 0 });
+        bumpers.push({ x: 540, y: 840, radius: 36, pulse: 0 });
+        bumpers.push({ x: 160, y: 1140, radius: 36, pulse: 0 });
+        bumpers.push({ x: 350, y: 1380, radius: 40, pulse: 0 });
 
-      // Galaxy Spinners
-      spinners.push({ x: 350, y: 1350, length: 135, angle: 0, speed: 0.04, color: '#a855f7' });
-      spinners.push({ x: 200, y: 2050, length: 115, angle: Math.PI / 4, speed: -0.045, color: '#06b6d4' });
-      spinners.push({ x: 500, y: 2050, length: 115, angle: -Math.PI / 4, speed: 0.045, color: '#06b6d4' });
-      spinners.push({ x: 350, y: 2450, length: 140, angle: 0, speed: 0.035, color: '#a855f7' });
+        spinners.push({ x: 350, y: 980, length: 130, angle: 0, speed: 0.042, color: '#a855f7' });
+        spinners.push({ x: 220, y: 1320, length: 110, angle: Math.PI / 4, speed: -0.045, color: '#06b6d4' });
 
-      // 🌀 3 Active Cosmic Wormholes (Black Hole In -> White Hole Out Upward / Cross Warps)
-      // WH1: In at y:1550 -> Out at y:650 (상단 대역류 워프!)
-      wormholes.push({ id: 'wh1', inX: 95, inY: 1550, outX: 580, outY: 650, radius: 26, color: '#a855f7', pulse: 0 });
-      // WH2: In at y:2300 -> Out at y:1150 (중상단 역류 워프!)
-      wormholes.push({ id: 'wh2', inX: 605, inY: 2300, outX: 140, outY: 1150, radius: 26, color: '#06b6d4', pulse: 0 });
-      // WH3: In at y:2920 -> Out at y:1850 (결승선 직전 상단 역류 워프!)
-      wormholes.push({ id: 'wh3', inX: 120, inY: 2920, outX: 580, outY: 1850, radius: 26, color: '#ec4899', pulse: 0 });
+        wormholes.push({ id: 'wh1', inX: 95, inY: 1120, outX: 575, outY: 540, radius: 26, color: '#a855f7', pulse: 0 });
+        wormholes.push({ id: 'wh2', inX: 590, inY: 1460, outX: 140, outY: 840, radius: 26, color: '#06b6d4', pulse: 0 });
 
-      // Anti-Gravity Booster Pads
-      speedPads.push({ x: 250, y: 900, width: 200, height: 32, boostY: 16 });
-      speedPads.push({ x: 100, y: 1780, width: 160, height: 30, boostY: 15, boostX: 4 });
-      speedPads.push({ x: 440, y: 1780, width: 160, height: 30, boostY: 15, boostX: -4 });
-      speedPads.push({ x: 270, y: 2780, width: 160, height: 32, boostY: 18 });
+        speedPads.push({ x: 250, y: 690, width: 200, height: 30, boostY: 16 });
+        speedPads.push({ x: 270, y: 1430, width: 160, height: 30, boostY: 17 });
 
-      // Cosmic Satellite Pendulum
-      pendulums.push({ anchorX: 350, anchorY: 1950, length: 140, bobRadius: 26, angle: -0.9, speed: 0.045, maxAngle: 1.1 });
+        pendulums.push({ anchorX: 350, anchorY: 1200, length: 130, bobRadius: 24, angle: -0.9, speed: 0.045, maxAngle: 1.1 });
+      } else {
+        // Medium & Long shared core (y: 900 ~ 2950)
+        ramps.push({ x1: 20, y1: 1050, x2: 450, y2: 1200 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1350, x2: 250, y2: 1500 });
+        ramps.push({ x1: 20, y1: 1650, x2: 450, y2: 1800 });
+
+        bumpers.push({ x: 550, y: 1150, radius: 36, pulse: 0 });
+        bumpers.push({ x: 150, y: 1450, radius: 36, pulse: 0 });
+        bumpers.push({ x: 550, y: 1750, radius: 36, pulse: 0 });
+        bumpers.push({ x: 350, y: 2650, radius: 42, pulse: 0 });
+
+        spinners.push({ x: 350, y: 1350, length: 135, angle: 0, speed: 0.04, color: '#a855f7' });
+        spinners.push({ x: 200, y: 2050, length: 115, angle: Math.PI / 4, speed: -0.045, color: '#06b6d4' });
+        spinners.push({ x: 500, y: 2050, length: 115, angle: -Math.PI / 4, speed: 0.045, color: '#06b6d4' });
+        spinners.push({ x: 350, y: 2450, length: 140, angle: 0, speed: 0.035, color: '#a855f7' });
+
+        wormholes.push({ id: 'wh1', inX: 95, inY: 1550, outX: 580, outY: 650, radius: 26, color: '#a855f7', pulse: 0 });
+        wormholes.push({ id: 'wh2', inX: 605, inY: 2300, outX: 140, outY: 1150, radius: 26, color: '#06b6d4', pulse: 0 });
+        wormholes.push({ id: 'wh3', inX: 120, inY: 2920, outX: 580, outY: 1850, radius: 26, color: '#ec4899', pulse: 0 });
+
+        speedPads.push({ x: 250, y: 900, width: 200, height: 32, boostY: 16 });
+        speedPads.push({ x: 100, y: 1780, width: 160, height: 30, boostY: 15, boostX: 4 });
+        speedPads.push({ x: 440, y: 1780, width: 160, height: 30, boostY: 15, boostX: -4 });
+        speedPads.push({ x: 270, y: 2780, width: 160, height: 32, boostY: 18 });
+
+        pendulums.push({ anchorX: 350, anchorY: 1950, length: 140, bobRadius: 26, angle: -0.9, speed: 0.045, maxAngle: 1.1 });
+
+        if (length === 'long') {
+          // Deep Space Extension (y: 3050 ~ 4780)
+          ramps.push({ x1: TRACK_WIDTH - 20, y1: 3100, x2: 240, y2: 3260 });
+          ramps.push({ x1: 20, y1: 3520, x2: 460, y2: 3680 });
+
+          bumpers.push({ x: 160, y: 3220, radius: 38, pulse: 0 });
+          bumpers.push({ x: 540, y: 3640, radius: 38, pulse: 0 });
+          bumpers.push({ x: 350, y: 4480, radius: 44, pulse: 0 });
+
+          spinners.push({ x: 350, y: 3380, length: 140, angle: 0, speed: -0.042, color: '#a855f7' });
+          spinners.push({ x: 200, y: 3980, length: 120, angle: Math.PI / 6, speed: 0.048, color: '#06b6d4' });
+          spinners.push({ x: 500, y: 3980, length: 120, angle: -Math.PI / 6, speed: -0.048, color: '#06b6d4' });
+
+          wormholes.push({ id: 'wh4', inX: 600, inY: 3820, outX: 120, outY: 2550, radius: 26, color: '#a855f7', pulse: 0 });
+          wormholes.push({ id: 'wh5', inX: 110, inY: 4700, outX: 570, outY: 3350, radius: 26, color: '#ec4899', pulse: 0 });
+
+          speedPads.push({ x: 260, y: 3850, width: 180, height: 32, boostY: 17 });
+          speedPads.push({ x: 270, y: 4620, width: 160, height: 32, boostY: 18 });
+
+          pendulums.push({ anchorX: 350, anchorY: 3150, length: 145, bobRadius: 27, angle: 0.9, speed: -0.046, maxAngle: 1.15 });
+          pendulums.push({ anchorX: 350, anchorY: 4180, length: 150, bobRadius: 28, angle: -0.9, speed: 0.048, maxAngle: 1.15 });
+        }
+      }
 
     } else if (theme === 'pinball') {
       // ==========================================
       // ⚡ MAP 2: 네온 핀볼 & 메가 범퍼 맵 (PINBALL)
       // ==========================================
-      // Dense Top Plinko Field
-      for (let r = 0; r < 8; r++) {
+      const topRows = length === 'short' ? 5 : length === 'long' ? 9 : 8;
+      for (let r = 0; r < topRows; r++) {
         const y = 370 + r * 65;
         const isOdd = r % 2 === 1;
         const cols = isOdd ? 9 : 10;
@@ -407,60 +485,113 @@ export default function MarbleRace({
         }
       }
 
-      // 9 Mega Bouncy Bumpers
-      bumpers.push({ x: 350, y: 950, radius: 48, pulse: 0 });
-      bumpers.push({ x: 170, y: 1250, radius: 40, pulse: 0 });
-      bumpers.push({ x: 530, y: 1250, radius: 40, pulse: 0 });
-      bumpers.push({ x: 350, y: 1550, radius: 52, pulse: 0 });
-      bumpers.push({ x: 180, y: 1900, radius: 42, pulse: 0 });
-      bumpers.push({ x: 520, y: 1900, radius: 42, pulse: 0 });
-      bumpers.push({ x: 350, y: 2250, radius: 48, pulse: 0 });
-      bumpers.push({ x: 160, y: 2700, radius: 36, pulse: 0 });
-      bumpers.push({ x: 540, y: 2700, radius: 36, pulse: 0 });
+      if (length === 'short') {
+        bumpers.push({ x: 350, y: 780, radius: 46, pulse: 0 });
+        bumpers.push({ x: 170, y: 1000, radius: 38, pulse: 0 });
+        bumpers.push({ x: 530, y: 1000, radius: 38, pulse: 0 });
+        bumpers.push({ x: 350, y: 1220, radius: 48, pulse: 0 });
+        bumpers.push({ x: 180, y: 1430, radius: 34, pulse: 0 });
 
-      // Fast Cyber Flipper Spinners
-      spinners.push({ x: 180, y: 1400, length: 115, angle: 0, speed: 0.065, color: '#ec4899' });
-      spinners.push({ x: 520, y: 1400, length: 115, angle: Math.PI, speed: -0.065, color: '#ec4899' });
-      spinners.push({ x: 220, y: 2050, length: 120, angle: Math.PI / 4, speed: -0.06, color: '#facc15' });
-      spinners.push({ x: 480, y: 2050, length: 120, angle: -Math.PI / 4, speed: 0.06, color: '#facc15' });
+        spinners.push({ x: 180, y: 1120, length: 110, angle: 0, speed: 0.065, color: '#ec4899' });
+        spinners.push({ x: 520, y: 1120, length: 110, angle: Math.PI, speed: -0.065, color: '#ec4899' });
 
-      // High-angle pinball deflector ramps
-      ramps.push({ x1: 20, y1: 1100, x2: 150, y2: 1180 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1100, x2: TRACK_WIDTH - 150, y2: 1180 });
-      ramps.push({ x1: 20, y1: 1750, x2: 150, y2: 1830 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1750, x2: TRACK_WIDTH - 150, y2: 1830 });
-      ramps.push({ x1: 0, y1: 2400, x2: 460, y2: 2550 });
-      ramps.push({ x1: TRACK_WIDTH, y1: 2600, x2: 240, y2: 2750 });
+        ramps.push({ x1: 20, y1: 880, x2: 150, y2: 960 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 880, x2: TRACK_WIDTH - 150, y2: 960 });
+        ramps.push({ x1: 0, y1: 1290, x2: 430, y2: 1410 });
 
-      // Dense Bottom Peg Cluster
-      for (let r = 0; r < 5; r++) {
-        const y = 2850 + r * 45;
-        const isOdd = r % 2 === 1;
-        const cols = isOdd ? 8 : 9;
-        const spacing = TRACK_WIDTH / cols;
-        for (let c = 1; c < cols; c++) {
-          const x = c * spacing + (isOdd ? spacing / 2 : 0);
-          if (x > 80 && x < TRACK_WIDTH - 80) {
-            pegs.push({ x, y, radius: 7 });
+        for (let r = 0; r < 3; r++) {
+          const y = 1400 + r * 42;
+          const isOdd = r % 2 === 1;
+          const cols = isOdd ? 8 : 9;
+          const spacing = TRACK_WIDTH / cols;
+          for (let c = 1; c < cols; c++) {
+            const x = c * spacing + (isOdd ? spacing / 2 : 0);
+            if (x > 80 && x < TRACK_WIDTH - 80) {
+              pegs.push({ x, y, radius: 7 });
+            }
           }
         }
+
+        speedPads.push({ x: 260, y: 840, width: 180, height: 30, boostY: 17 });
+        speedPads.push({ x: 260, y: 1300, width: 180, height: 30, boostY: 17 });
+        wormholes.push({ id: 'wh_pb', inX: 80, inY: 1430, outX: 520, outY: 820, radius: 25, color: '#ec4899', pulse: 0 });
+      } else {
+        bumpers.push({ x: 350, y: 950, radius: 48, pulse: 0 });
+        bumpers.push({ x: 170, y: 1250, radius: 40, pulse: 0 });
+        bumpers.push({ x: 530, y: 1250, radius: 40, pulse: 0 });
+        bumpers.push({ x: 350, y: 1550, radius: 52, pulse: 0 });
+        bumpers.push({ x: 180, y: 1900, radius: 42, pulse: 0 });
+        bumpers.push({ x: 520, y: 1900, radius: 42, pulse: 0 });
+        bumpers.push({ x: 350, y: 2250, radius: 48, pulse: 0 });
+        bumpers.push({ x: 160, y: 2700, radius: 36, pulse: 0 });
+        bumpers.push({ x: 540, y: 2700, radius: 36, pulse: 0 });
+
+        spinners.push({ x: 180, y: 1400, length: 115, angle: 0, speed: 0.065, color: '#ec4899' });
+        spinners.push({ x: 520, y: 1400, length: 115, angle: Math.PI, speed: -0.065, color: '#ec4899' });
+        spinners.push({ x: 220, y: 2050, length: 120, angle: Math.PI / 4, speed: -0.06, color: '#facc15' });
+        spinners.push({ x: 480, y: 2050, length: 120, angle: -Math.PI / 4, speed: 0.06, color: '#facc15' });
+
+        ramps.push({ x1: 20, y1: 1100, x2: 150, y2: 1180 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1100, x2: TRACK_WIDTH - 150, y2: 1180 });
+        ramps.push({ x1: 20, y1: 1750, x2: 150, y2: 1830 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1750, x2: TRACK_WIDTH - 150, y2: 1830 });
+        ramps.push({ x1: 0, y1: 2400, x2: 460, y2: 2550 });
+        ramps.push({ x1: TRACK_WIDTH, y1: 2600, x2: 240, y2: 2750 });
+
+        const bottomClusterStart = length === 'long' ? 4620 : 2850;
+        for (let r = 0; r < 5; r++) {
+          const y = bottomClusterStart + r * 45;
+          const isOdd = r % 2 === 1;
+          const cols = isOdd ? 8 : 9;
+          const spacing = TRACK_WIDTH / cols;
+          for (let c = 1; c < cols; c++) {
+            const x = c * spacing + (isOdd ? spacing / 2 : 0);
+            if (x > 80 && x < TRACK_WIDTH - 80) {
+              pegs.push({ x, y, radius: 7 });
+            }
+          }
+        }
+
+        speedPads.push({ x: 260, y: 1050, width: 180, height: 30, boostY: 17 });
+        speedPads.push({ x: 100, y: 1650, width: 160, height: 30, boostY: 16, boostX: 5 });
+        speedPads.push({ x: 440, y: 1650, width: 160, height: 30, boostY: 16, boostX: -5 });
+        speedPads.push({ x: 260, y: 2350, width: 180, height: 30, boostY: 18 });
+
+        wormholes.push({ id: 'wh_pb', inX: 80, inY: 2580, outX: 520, outY: 1700, radius: 25, color: '#ec4899', pulse: 0 });
+
+        if (length === 'long') {
+          // Mega Arcade Extension (y: 2950 ~ 4550)
+          bumpers.push({ x: 350, y: 3050, radius: 50, pulse: 0 });
+          bumpers.push({ x: 170, y: 3400, radius: 42, pulse: 0 });
+          bumpers.push({ x: 530, y: 3400, radius: 42, pulse: 0 });
+          bumpers.push({ x: 350, y: 3780, radius: 52, pulse: 0 });
+          bumpers.push({ x: 160, y: 4250, radius: 38, pulse: 0 });
+          bumpers.push({ x: 540, y: 4250, radius: 38, pulse: 0 });
+
+          spinners.push({ x: 180, y: 3200, length: 115, angle: 0, speed: -0.068, color: '#ec4899' });
+          spinners.push({ x: 520, y: 3200, length: 115, angle: Math.PI, speed: 0.068, color: '#ec4899' });
+          spinners.push({ x: 220, y: 3980, length: 120, angle: Math.PI / 4, speed: 0.062, color: '#facc15' });
+          spinners.push({ x: 480, y: 3980, length: 120, angle: -Math.PI / 4, speed: -0.062, color: '#facc15' });
+
+          ramps.push({ x1: 20, y1: 3580, x2: 160, y2: 3660 });
+          ramps.push({ x1: TRACK_WIDTH - 20, y1: 3580, x2: TRACK_WIDTH - 160, y2: 3660 });
+          ramps.push({ x1: 0, y1: 4120, x2: 450, y2: 4270 });
+          ramps.push({ x1: TRACK_WIDTH, y1: 4320, x2: 250, y2: 4470 });
+
+          speedPads.push({ x: 100, y: 3320, width: 160, height: 30, boostY: 16, boostX: 5 });
+          speedPads.push({ x: 440, y: 3320, width: 160, height: 30, boostY: 16, boostX: -5 });
+          speedPads.push({ x: 260, y: 4050, width: 180, height: 30, boostY: 18 });
+
+          wormholes.push({ id: 'wh_pb2', inX: 615, inY: 4460, outX: 160, outY: 3000, radius: 25, color: '#facc15', pulse: 0 });
+        }
       }
-
-      // Turbo Speed Boosters
-      speedPads.push({ x: 260, y: 1050, width: 180, height: 30, boostY: 17 });
-      speedPads.push({ x: 100, y: 1650, width: 160, height: 30, boostY: 16, boostX: 5 });
-      speedPads.push({ x: 440, y: 1650, width: 160, height: 30, boostY: 16, boostX: -5 });
-      speedPads.push({ x: 260, y: 2350, width: 180, height: 30, boostY: 18 });
-
-      // Pinball Bonus Warp Loop
-      wormholes.push({ id: 'wh_pb', inX: 80, inY: 2580, outX: 520, outY: 1700, radius: 25, color: '#ec4899', pulse: 0 });
 
     } else if (theme === 'glacier') {
       // ==========================================
       // ❄️ MAP 3: 빙하 협곡 & 스윙 해머추 맵 (GLACIER)
       // ==========================================
-      // Icicle cluster pegs
-      for (let r = 0; r < 5; r++) {
+      const pegRows = length === 'short' ? 3 : length === 'long' ? 6 : 5;
+      for (let r = 0; r < pegRows; r++) {
         const y = 380 + r * 70;
         const isOdd = r % 2 === 1;
         const cols = isOdd ? 7 : 8;
@@ -473,53 +604,100 @@ export default function MarbleRace({
         }
       }
 
-      // 3 Giant Ice Swinging Hammers (Pendulums)
-      pendulums.push({ anchorX: 350, anchorY: 1050, length: 160, bobRadius: 32, angle: -1.1, speed: 0.048, maxAngle: 1.25 });
-      pendulums.push({ anchorX: 350, anchorY: 1750, length: 175, bobRadius: 34, angle: 1.0, speed: -0.052, maxAngle: 1.3 });
-      pendulums.push({ anchorX: 350, anchorY: 2550, length: 165, bobRadius: 32, angle: -0.9, speed: 0.05, maxAngle: 1.2 });
+      if (length === 'short') {
+        pendulums.push({ anchorX: 350, anchorY: 940, length: 155, bobRadius: 30, angle: -1.1, speed: 0.05, maxAngle: 1.25 });
 
-      // Steep Ice Slides (Ramps)
-      ramps.push({ x1: 20, y1: 850, x2: 480, y2: 1000 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1250, x2: 220, y2: 1400 });
-      ramps.push({ x1: 20, y1: 1550, x2: 480, y2: 1700 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 1950, x2: 220, y2: 2100 });
-      ramps.push({ x1: 20, y1: 2350, x2: 480, y2: 2500 });
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 2750, x2: 220, y2: 2900 });
+        ramps.push({ x1: 20, y1: 680, x2: 460, y2: 820 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1020, x2: 240, y2: 1160 });
+        ramps.push({ x1: 20, y1: 1310, x2: 460, y2: 1450 });
 
-      // Frozen Ice Bumpers at turnarounds
-      bumpers.push({ x: 560, y: 950, radius: 32, pulse: 0 });
-      bumpers.push({ x: 140, y: 1350, radius: 32, pulse: 0 });
-      bumpers.push({ x: 560, y: 1650, radius: 32, pulse: 0 });
-      bumpers.push({ x: 140, y: 2050, radius: 32, pulse: 0 });
-      bumpers.push({ x: 560, y: 2450, radius: 32, pulse: 0 });
+        bumpers.push({ x: 560, y: 760, radius: 32, pulse: 0 });
+        bumpers.push({ x: 140, y: 1120, radius: 32, pulse: 0 });
+        bumpers.push({ x: 560, y: 1410, radius: 32, pulse: 0 });
 
-      // Ice Propeller Spinners
-      spinners.push({ x: 230, y: 1480, length: 110, angle: 0, speed: 0.04, color: '#38bdf8' });
-      spinners.push({ x: 470, y: 2180, length: 110, angle: Math.PI / 2, speed: -0.04, color: '#38bdf8' });
+        spinners.push({ x: 240, y: 1220, length: 110, angle: 0, speed: 0.042, color: '#38bdf8' });
 
-      // Frost Slide Boosters
-      speedPads.push({ x: 250, y: 780, width: 200, height: 30, boostY: 17 });
-      speedPads.push({ x: 120, y: 2150, width: 160, height: 30, boostY: 16, boostX: 5 });
-      speedPads.push({ x: 260, y: 2950, width: 180, height: 32, boostY: 18 });
+        speedPads.push({ x: 250, y: 610, width: 200, height: 30, boostY: 17 });
+        speedPads.push({ x: 260, y: 1460, width: 180, height: 32, boostY: 18 });
 
-      // Glacier Crevasse Warp
-      wormholes.push({ id: 'wh_gl', inX: 90, inY: 2400, outX: 560, outY: 1550, radius: 25, color: '#38bdf8', pulse: 0 });
+        wormholes.push({ id: 'wh_gl', inX: 90, inY: 1380, outX: 560, outY: 720, radius: 25, color: '#38bdf8', pulse: 0 });
 
-      // 🧊 Strategic Ice Crystal Traps (닿으면 꽁꽁 얼어붙어 1.5초간 멈추는 얼음 오브젝트)
-      iceTraps.push({ id: 'ice_1', x: 260, y: 720, radius: 28, pulse: 0, frozenDuration: 90 });
-      iceTraps.push({ id: 'ice_2', x: 420, y: 1120, radius: 28, pulse: 0, frozenDuration: 90 });
-      iceTraps.push({ id: 'ice_3', x: 180, y: 1470, radius: 26, pulse: 0, frozenDuration: 85 });
-      iceTraps.push({ id: 'ice_4', x: 350, y: 1850, radius: 30, pulse: 0, frozenDuration: 95 });
-      iceTraps.push({ id: 'ice_5', x: 160, y: 2240, radius: 28, pulse: 0, frozenDuration: 90 });
-      iceTraps.push({ id: 'ice_6', x: 450, y: 2600, radius: 28, pulse: 0, frozenDuration: 90 });
-      iceTraps.push({ id: 'ice_7', x: 280, y: 2980, radius: 28, pulse: 0, frozenDuration: 95 });
+        iceTraps.push({ id: 'ice_1', x: 260, y: 620, radius: 28, pulse: 0, frozenDuration: 85 });
+        iceTraps.push({ id: 'ice_2', x: 420, y: 1020, radius: 28, pulse: 0, frozenDuration: 90 });
+        iceTraps.push({ id: 'ice_3', x: 260, y: 1380, radius: 28, pulse: 0, frozenDuration: 90 });
+      } else {
+        pendulums.push({ anchorX: 350, anchorY: 1050, length: 160, bobRadius: 32, angle: -1.1, speed: 0.048, maxAngle: 1.25 });
+        pendulums.push({ anchorX: 350, anchorY: 1750, length: 175, bobRadius: 34, angle: 1.0, speed: -0.052, maxAngle: 1.3 });
+        pendulums.push({ anchorX: 350, anchorY: 2550, length: 165, bobRadius: 32, angle: -0.9, speed: 0.05, maxAngle: 1.2 });
+
+        ramps.push({ x1: 20, y1: 850, x2: 480, y2: 1000 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1250, x2: 220, y2: 1400 });
+        ramps.push({ x1: 20, y1: 1550, x2: 480, y2: 1700 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 1950, x2: 220, y2: 2100 });
+        ramps.push({ x1: 20, y1: 2350, x2: 480, y2: 2500 });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 2750, x2: 220, y2: 2900 });
+
+        bumpers.push({ x: 560, y: 950, radius: 32, pulse: 0 });
+        bumpers.push({ x: 140, y: 1350, radius: 32, pulse: 0 });
+        bumpers.push({ x: 560, y: 1650, radius: 32, pulse: 0 });
+        bumpers.push({ x: 140, y: 2050, radius: 32, pulse: 0 });
+        bumpers.push({ x: 560, y: 2450, radius: 32, pulse: 0 });
+
+        spinners.push({ x: 230, y: 1480, length: 110, angle: 0, speed: 0.04, color: '#38bdf8' });
+        spinners.push({ x: 470, y: 2180, length: 110, angle: Math.PI / 2, speed: -0.04, color: '#38bdf8' });
+
+        speedPads.push({ x: 250, y: 780, width: 200, height: 30, boostY: 17 });
+        speedPads.push({ x: 120, y: 2150, width: 160, height: 30, boostY: 16, boostX: 5 });
+        speedPads.push({ x: 260, y: 2950, width: 180, height: 32, boostY: 18 });
+
+        wormholes.push({ id: 'wh_gl', inX: 90, inY: 2400, outX: 560, outY: 1550, radius: 25, color: '#38bdf8', pulse: 0 });
+
+        iceTraps.push({ id: 'ice_1', x: 260, y: 720, radius: 28, pulse: 0, frozenDuration: 90 });
+        iceTraps.push({ id: 'ice_2', x: 420, y: 1120, radius: 28, pulse: 0, frozenDuration: 90 });
+        iceTraps.push({ id: 'ice_3', x: 180, y: 1470, radius: 26, pulse: 0, frozenDuration: 85 });
+        iceTraps.push({ id: 'ice_4', x: 350, y: 1850, radius: 30, pulse: 0, frozenDuration: 95 });
+        iceTraps.push({ id: 'ice_5', x: 160, y: 2240, radius: 28, pulse: 0, frozenDuration: 90 });
+        iceTraps.push({ id: 'ice_6', x: 450, y: 2600, radius: 28, pulse: 0, frozenDuration: 90 });
+        iceTraps.push({ id: 'ice_7', x: 280, y: 2980, radius: 28, pulse: 0, frozenDuration: 95 });
+
+        if (length === 'long') {
+          // Deep Glacial Canyon Extension (y: 3150 ~ 4780)
+          pendulums.push({ anchorX: 350, anchorY: 3450, length: 170, bobRadius: 34, angle: 1.0, speed: -0.052, maxAngle: 1.3 });
+          pendulums.push({ anchorX: 350, anchorY: 4300, length: 170, bobRadius: 33, angle: -1.0, speed: 0.05, maxAngle: 1.25 });
+
+          ramps.push({ x1: 20, y1: 3180, x2: 480, y2: 3330 });
+          ramps.push({ x1: TRACK_WIDTH - 20, y1: 3620, x2: 220, y2: 3770 });
+          ramps.push({ x1: 20, y1: 4020, x2: 480, y2: 4170 });
+          ramps.push({ x1: TRACK_WIDTH - 20, y1: 4480, x2: 220, y2: 4630 });
+
+          bumpers.push({ x: 560, y: 3280, radius: 32, pulse: 0 });
+          bumpers.push({ x: 140, y: 3720, radius: 32, pulse: 0 });
+          bumpers.push({ x: 560, y: 4120, radius: 32, pulse: 0 });
+          bumpers.push({ x: 140, y: 4560, radius: 32, pulse: 0 });
+
+          spinners.push({ x: 230, y: 3860, length: 115, angle: 0, speed: 0.044, color: '#38bdf8' });
+          spinners.push({ x: 470, y: 4380, length: 115, angle: Math.PI / 2, speed: -0.044, color: '#38bdf8' });
+
+          speedPads.push({ x: 120, y: 3880, width: 160, height: 30, boostY: 17, boostX: 5 });
+          speedPads.push({ x: 260, y: 4720, width: 180, height: 32, boostY: 18 });
+
+          wormholes.push({ id: 'wh_gl2', inX: 600, inY: 4520, outX: 140, outY: 3120, radius: 25, color: '#06b6d4', pulse: 0 });
+
+          iceTraps.push({ id: 'ice_8', x: 350, y: 3360, radius: 29, pulse: 0, frozenDuration: 95 });
+          iceTraps.push({ id: 'ice_9', x: 180, y: 3780, radius: 28, pulse: 0, frozenDuration: 90 });
+          iceTraps.push({ id: 'ice_10', x: 460, y: 4120, radius: 28, pulse: 0, frozenDuration: 90 });
+          iceTraps.push({ id: 'ice_11', x: 220, y: 4460, radius: 28, pulse: 0, frozenDuration: 90 });
+          iceTraps.push({ id: 'ice_12', x: 420, y: 4740, radius: 28, pulse: 0, frozenDuration: 95 });
+        }
+      }
 
       // Generate Ambient Snowflakes for Glacier theme
+      const flakeCount = length === 'short' ? 55 : length === 'long' ? 140 : 90;
       const flakes: Snowflake[] = [];
-      for (let i = 0; i < 90; i++) {
+      for (let i = 0; i < flakeCount; i++) {
         flakes.push({
           x: Math.random() * TRACK_WIDTH,
-          y: Math.random() * TRACK_HEIGHT,
+          y: Math.random() * trackHeight,
           vx: (Math.random() - 0.5) * 2 - 1.2,
           vy: Math.random() * 2.5 + 1.5,
           size: Math.random() * 3 + 1.5,
@@ -532,8 +710,8 @@ export default function MarbleRace({
       // ==========================================
       // ⚙️ MAP 4: 메카닉 팩토리 & 수평 컨베이어 벨트 맵 (FACTORY)
       // ==========================================
-      // Top Plinko Pins (y: 360 ~ 580)
-      for (let r = 0; r < 4; r++) {
+      const pegRows = length === 'short' ? 3 : length === 'long' ? 5 : 4;
+      for (let r = 0; r < pegRows; r++) {
         const y = 370 + r * 60;
         const isOdd = r % 2 === 1;
         const cols = isOdd ? 8 : 9;
@@ -546,56 +724,87 @@ export default function MarbleRace({
         }
       }
 
-      // ── CONVEYOR 1: Assembly Line 01 (우측 진행 수평 컨베이어) at y: 680 ──
-      // Spans x: 30 ~ 540 (우측 x: 540 ~ 680 사이로 구슬이 낙하)
-      conveyors.push({ x: 30, y: 680, width: 510, height: 32, speed: 7.5, label: "🏭 LINE 01 >>>" });
-      // 우측 벽면 유도 경사로
-      ramps.push({ x1: TRACK_WIDTH - 20, y1: 760, x2: 520, y2: 880 });
+      if (length === 'short') {
+        conveyors.push({ x: 30, y: 610, width: 500, height: 32, speed: 7.5, label: "🏭 LINE 01 >>>" });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 690, x2: 520, y2: 800 });
 
-      // ── CONVEYOR 2: Cargo Belt 02 (좌측 진행 수평 컨베이어) at y: 1040 ──
-      // Spans x: 160 ~ 670 (좌측 x: 20 ~ 160 사이로 구슬이 낙하)
-      conveyors.push({ x: 160, y: 1040, width: 510, height: 32, speed: -7.5, label: "<<< CARGO 02 🏭" });
-      // 좌측 벽면 유도 경사로
-      ramps.push({ x1: 20, y1: 1120, x2: 180, y2: 1240 });
+        conveyors.push({ x: 170, y: 890, width: 500, height: 32, speed: -7.5, label: "<<< CARGO 02 🏭" });
+        ramps.push({ x1: 20, y1: 970, x2: 180, y2: 1080 });
 
-      // Industrial Gear Spinners (Pair 1 - Dual interlocking gear at y: 1350)
-      spinners.push({ x: 250, y: 1350, length: 125, angle: 0, speed: 0.045, color: '#f59e0b' });
-      spinners.push({ x: 450, y: 1350, length: 125, angle: Math.PI / 2, speed: -0.045, color: '#f59e0b' });
+        spinners.push({ x: 250, y: 1080, length: 120, angle: 0, speed: 0.046, color: '#f59e0b' });
+        spinners.push({ x: 450, y: 1080, length: 120, angle: Math.PI / 2, speed: -0.046, color: '#f59e0b' });
 
-      // ── CONVEYORS 3 & 4: Dual Center-Converging Conveyors (중앙 합류 컨베이어) at y: 1560 ──
-      // 좌측 벨트는 우측으로, 우측 벨트는 좌측으로 중앙(x: 300~400)으로 구슬을 모음
-      conveyors.push({ x: 20, y: 1560, width: 280, height: 32, speed: 7.0, label: "FEEDER A >>>" });
-      conveyors.push({ x: 400, y: 1560, width: 280, height: 32, speed: -7.0, label: "<<< FEEDER B" });
+        pendulums.push({ anchorX: 350, anchorY: 730, length: 130, bobRadius: 28, angle: -0.9, speed: 0.05, maxAngle: 1.1 });
 
-      // Industrial Wrecking Ball Pendulum (중앙 낙하 지점 거대 햄머추) at y: 1720
-      pendulums.push({ anchorX: 350, anchorY: 1640, length: 140, bobRadius: 32, angle: -0.9, speed: 0.05, maxAngle: 1.15 });
+        conveyors.push({ x: 30, y: 1240, width: 420, height: 32, speed: 8.0, label: "SORTING A >>>" });
+        conveyors.push({ x: 250, y: 1400, width: 420, height: 32, speed: -8.0, label: "<<< SORTING B" });
 
-      // Triple gear row at y: 1880
-      spinners.push({ x: 170, y: 1880, length: 105, angle: 0, speed: 0.042, color: '#eab308' });
-      spinners.push({ x: 350, y: 1880, length: 125, angle: Math.PI / 3, speed: -0.048, color: '#f97316' });
-      spinners.push({ x: 530, y: 1880, length: 105, angle: 0, speed: 0.042, color: '#eab308' });
+        bumpers.push({ x: 600, y: 660, radius: 34, pulse: 0 });
+        bumpers.push({ x: 100, y: 940, radius: 34, pulse: 0 });
 
-      // ── CONVEYOR 5: High-Speed Turbo Conveyor (초고속 우측 컨베이어) at y: 2080 ──
-      conveyors.push({ x: 30, y: 2080, width: 520, height: 32, speed: 8.5, label: "⚡ TURBO EXPRESS 05 >>>" });
+        wormholes.push({ id: 'wh_fc', inX: 95, inY: 1420, outX: 580, outY: 740, radius: 26, color: '#f59e0b', pulse: 0 });
+      } else {
+        conveyors.push({ x: 30, y: 680, width: 510, height: 32, speed: 7.5, label: "🏭 LINE 01 >>>" });
+        ramps.push({ x1: TRACK_WIDTH - 20, y1: 760, x2: 520, y2: 880 });
 
-      // ── CONVEYOR 6: Return Loop Conveyor (좌측 회송 컨베이어) at y: 2360 ──
-      conveyors.push({ x: 150, y: 2360, width: 520, height: 32, speed: -8.5, label: "<<< RETURN LOOP 06 ⚡" });
+        conveyors.push({ x: 160, y: 1040, width: 510, height: 32, speed: -7.5, label: "<<< CARGO 02 🏭" });
+        ramps.push({ x1: 20, y1: 1120, x2: 180, y2: 1240 });
 
-      // Factory Ventilation Shaft Warp (환기구 역류 워프: y: 2480 -> y: 1200)
-      wormholes.push({ id: 'wh_fc', inX: 95, inY: 2480, outX: 580, outY: 1200, radius: 26, color: '#f59e0b', pulse: 0 });
+        spinners.push({ x: 250, y: 1350, length: 125, angle: 0, speed: 0.045, color: '#f59e0b' });
+        spinners.push({ x: 450, y: 1350, length: 125, angle: Math.PI / 2, speed: -0.045, color: '#f59e0b' });
 
-      // Heavy Industrial Rotor at y: 2620
-      spinners.push({ x: 350, y: 2620, length: 160, angle: 0, speed: 0.038, color: '#ef4444' });
+        conveyors.push({ x: 20, y: 1560, width: 280, height: 32, speed: 7.0, label: "FEEDER A >>>" });
+        conveyors.push({ x: 400, y: 1560, width: 280, height: 32, speed: -7.0, label: "<<< FEEDER B" });
 
-      // ── CONVEYORS 7 & 8: Pre-Finale Sorter Conveyors (결승선 진입 전 지그재그 분류 컨베이어) ──
-      conveyors.push({ x: 30, y: 2780, width: 440, height: 32, speed: 8.0, label: "SORTING A >>>" });
-      conveyors.push({ x: 230, y: 2940, width: 440, height: 32, speed: -8.0, label: "<<< SORTING B" });
+        pendulums.push({ anchorX: 350, anchorY: 1640, length: 140, bobRadius: 32, angle: -0.9, speed: 0.05, maxAngle: 1.15 });
 
-      // Hydraulic Piston Bumpers for extra dynamic rebound
-      bumpers.push({ x: 600, y: 730, radius: 34, pulse: 0 });
-      bumpers.push({ x: 100, y: 1090, radius: 34, pulse: 0 });
-      bumpers.push({ x: 600, y: 2130, radius: 34, pulse: 0 });
-      bumpers.push({ x: 100, y: 2410, radius: 34, pulse: 0 });
+        spinners.push({ x: 170, y: 1880, length: 105, angle: 0, speed: 0.042, color: '#eab308' });
+        spinners.push({ x: 350, y: 1880, length: 125, angle: Math.PI / 3, speed: -0.048, color: '#f97316' });
+        spinners.push({ x: 530, y: 1880, length: 105, angle: 0, speed: 0.042, color: '#eab308' });
+
+        conveyors.push({ x: 30, y: 2080, width: 520, height: 32, speed: 8.5, label: "⚡ TURBO EXPRESS 05 >>>" });
+        conveyors.push({ x: 150, y: 2360, width: 520, height: 32, speed: -8.5, label: "<<< RETURN LOOP 06 ⚡" });
+
+        wormholes.push({ id: 'wh_fc', inX: 95, inY: 2480, outX: 580, outY: 1200, radius: 26, color: '#f59e0b', pulse: 0 });
+
+        spinners.push({ x: 350, y: 2620, length: 160, angle: 0, speed: 0.038, color: '#ef4444' });
+
+        conveyors.push({ x: 30, y: 2780, width: 440, height: 32, speed: 8.0, label: "SORTING A >>>" });
+        conveyors.push({ x: 230, y: 2940, width: 440, height: 32, speed: -8.0, label: "<<< SORTING B" });
+
+        bumpers.push({ x: 600, y: 730, radius: 34, pulse: 0 });
+        bumpers.push({ x: 100, y: 1090, radius: 34, pulse: 0 });
+        bumpers.push({ x: 600, y: 2130, radius: 34, pulse: 0 });
+        bumpers.push({ x: 100, y: 2410, radius: 34, pulse: 0 });
+
+        if (length === 'long') {
+          // Mega Assembly Line Extension (y: 3150 ~ 4780)
+          conveyors.push({ x: 30, y: 3180, width: 520, height: 32, speed: 8.2, label: "🏭 LINE 07 >>>" });
+          ramps.push({ x1: TRACK_WIDTH - 20, y1: 3260, x2: 520, y2: 3380 });
+
+          conveyors.push({ x: 150, y: 3500, width: 520, height: 32, speed: -8.2, label: "<<< CARGO 08 🏭" });
+          ramps.push({ x1: 20, y1: 3580, x2: 180, y2: 3700 });
+
+          spinners.push({ x: 230, y: 3820, length: 130, angle: 0, speed: 0.048, color: '#f59e0b' });
+          spinners.push({ x: 470, y: 3820, length: 130, angle: Math.PI / 2, speed: -0.048, color: '#f59e0b' });
+
+          conveyors.push({ x: 20, y: 4040, width: 280, height: 32, speed: 7.5, label: "FEEDER C >>>" });
+          conveyors.push({ x: 400, y: 4040, width: 280, height: 32, speed: -7.5, label: "<<< FEEDER D" });
+
+          pendulums.push({ anchorX: 350, anchorY: 4140, length: 145, bobRadius: 32, angle: 0.9, speed: -0.052, maxAngle: 1.15 });
+
+          spinners.push({ x: 350, y: 4380, length: 165, angle: 0, speed: 0.04, color: '#ef4444' });
+
+          conveyors.push({ x: 30, y: 4540, width: 440, height: 32, speed: 8.5, label: "FINAL SORT A >>>" });
+          conveyors.push({ x: 230, y: 4700, width: 440, height: 32, speed: -8.5, label: "<<< FINAL SORT B" });
+
+          bumpers.push({ x: 600, y: 3230, radius: 34, pulse: 0 });
+          bumpers.push({ x: 100, y: 3550, radius: 34, pulse: 0 });
+          bumpers.push({ x: 600, y: 4590, radius: 34, pulse: 0 });
+
+          wormholes.push({ id: 'wh_fc2', inX: 600, inY: 4420, outX: 120, outY: 2880, radius: 26, color: '#f97316', pulse: 0 });
+        }
+      }
     }
 
     pegsRef.current = pegs;
@@ -649,13 +858,16 @@ export default function MarbleRace({
     setWinners([]);
   };
 
-  // Initialize on mount or when students / initialMapTheme change
+  // Initialize on mount or when students / initialMapTheme / initialMapLength change
   useEffect(() => {
     const targetTheme = initialMapTheme || mapTheme;
+    const targetLength = initialMapLength || mapLength;
     setMapTheme(targetTheme);
-    initTrack(targetTheme);
+    setMapLength(targetLength);
+    mapLengthRef.current = targetLength;
+    initTrack(targetTheme, targetLength);
     initMarbles();
-  }, [students, initialMapTheme]);
+  }, [students, initialMapTheme, initialMapLength]);
 
   // Start Race countdown
   const startCountdown = async () => {
@@ -759,6 +971,11 @@ export default function MarbleRace({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const trackHeight = getTrackHeightByLength(mapLength);
+    const finishY = trackHeight - 250;
+    const alleyTop = trackHeight - 400;
+    const funnelTop = trackHeight - 520;
+
     const gravity = mapTheme === 'cosmic' ? 0.21 : (mapTheme === 'glacier' ? 0.24 : 0.23);
     const friction = mapTheme === 'glacier' ? 0.992 : (mapTheme === 'cosmic' ? 0.987 : 0.985);
     const wallElasticity = mapTheme === 'pinball' ? 0.85 : 0.7;
@@ -856,7 +1073,7 @@ export default function MarbleRace({
             }
             if (sf.x < 0) sf.x = TRACK_WIDTH;
             else if (sf.x > TRACK_WIDTH) sf.x = 0;
-            if (sf.y > TRACK_HEIGHT) sf.y = 0;
+            if (sf.y > trackHeight) sf.y = 0;
           }
         }
 
@@ -1168,7 +1385,7 @@ export default function MarbleRace({
 
               if (isEdge) {
                 m.x = Math.max(305 + m.radius + 2, Math.min(395 - m.radius - 2, m.x));
-                m.y = Math.min(m.y, 3200 - m.radius - 6);
+                m.y = Math.min(m.y, alleyTop - m.radius - 6);
                 m.vy = -Math.abs(m.vy) * 0.8 - 9;
                 m.vx = (Math.random() - 0.5) * 6;
               } else {
@@ -1377,11 +1594,10 @@ export default function MarbleRace({
           // --- 100% Solid Wall Enclosure for Finish Funnel & Alley (Prevents wall clipping & tunneling) ---
           const ALLEY_L = 305;
           const ALLEY_R = 395;
-          const ALLEY_TOP = 3200;
 
-          // A. Funnel zone (y: 3080 to ALLEY_TOP)
-          if (m.y >= 3080 && m.y < ALLEY_TOP) {
-            const progress = (m.y - 3080) / (ALLEY_TOP - 3080);
+          // A. Funnel zone (funnelTop to alleyTop)
+          if (m.y >= funnelTop && m.y < alleyTop) {
+            const progress = (m.y - funnelTop) / (alleyTop - funnelTop);
             const leftWallX = 20 + progress * (ALLEY_L - 20);
             if (m.x < leftWallX + m.radius) {
               m.x = leftWallX + m.radius;
@@ -1394,8 +1610,8 @@ export default function MarbleRace({
             }
           }
 
-          // B. Vertical Alley zone (y >= ALLEY_TOP)
-          if (m.y >= ALLEY_TOP) {
+          // B. Vertical Alley zone (y >= alleyTop)
+          if (m.y >= alleyTop) {
             if (m.x < ALLEY_L + m.radius) {
               m.x = ALLEY_L + m.radius;
               m.vx = Math.abs(m.vx) * 0.6;
@@ -1407,7 +1623,7 @@ export default function MarbleRace({
 
           // Check Finish Line (STRICTLY VALID ONLY INSIDE THE NARROW ALLEY!)
           const isInsideFinishAlley = m.x >= ALLEY_L - 2 && m.x <= ALLEY_R + 2;
-          if (m.y >= FINISH_Y && isInsideFinishAlley && !m.finished) {
+          if (m.y >= finishY && isInsideFinishAlley && !m.finished) {
             m.finished = true;
 
             if (winRule === 'first') {
@@ -1573,7 +1789,7 @@ export default function MarbleRace({
       }
 
       if (isSimulating && currentLead) {
-        if (raceState === 'racing' && currentLead.y > 250 && currentLead.y < FINISH_Y) {
+        if (raceState === 'racing' && currentLead.y > 250 && currentLead.y < finishY) {
           if (leaderIdRef.current && leaderIdRef.current !== currentLead.id) {
             if (slowMoCooldownRef.current <= 0) {
               slowMoTimerRef.current = 65; // ~1.1s slow motion
@@ -1591,13 +1807,13 @@ export default function MarbleRace({
       zoomRef.current += (targetZoom - zoomRef.current) * 0.08;
       const currentZoom = zoomRef.current;
 
-      let targetCameraY = isSimulating ? FINISH_Y - 300 : 0;
+      let targetCameraY = isSimulating ? finishY - 300 : 0;
       let leadX = TRACK_WIDTH / 2;
       if (isSimulating && currentLead) {
         targetCameraY = currentLead.y - 250;
         leadX = currentLead.x;
       }
-      targetCameraY = Math.max(0, Math.min(TRACK_HEIGHT - 650, targetCameraY));
+      targetCameraY = Math.max(0, Math.min(trackHeight - 650, targetCameraY));
       cameraYRef.current += (targetCameraY - cameraYRef.current) * (isSimulating ? 0.08 : 0.25);
       const cameraY = cameraYRef.current;
 
@@ -1624,7 +1840,7 @@ export default function MarbleRace({
 
       // Visible Vertical Frustum Bounds in World Space
       const viewTop = Math.max(0, cameraY - 200);
-      const viewBottom = Math.min(TRACK_HEIGHT, cameraY + 850);
+      const viewBottom = Math.min(trackHeight, cameraY + 850);
 
       // Track Background & Side Rails adapted to theme
       const bgColors = {
@@ -1640,8 +1856,9 @@ export default function MarbleRace({
       if (mapTheme === 'cosmic') {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
         ctx.beginPath();
-        for (let i = 0; i < 70; i++) {
-          const sy = (i * 55 + ((now * 0.03) % 55)) % TRACK_HEIGHT;
+        const starCount = Math.round(trackHeight / 50);
+        for (let i = 0; i < starCount; i++) {
+          const sy = (i * 55 + ((now * 0.03) % 55)) % trackHeight;
           if (sy < viewTop || sy > viewBottom) continue;
           const sx = (Math.sin(i * 123.45) * 0.5 + 0.5) * (TRACK_WIDTH - 60) + 30;
           const sr = (i % 4 === 0) ? 2.2 : (i % 2 === 0 ? 1.5 : 1);
@@ -2095,11 +2312,11 @@ export default function MarbleRace({
       }
 
       // Draw Finish Line (Narrow Alley Goal & Checkered Pattern - Culled)
-      if (viewBottom >= 3090) {
+      if (viewBottom >= funnelTop + 10) {
         ctx.save();
         const sqSize = 15;
         for (let x = 305; x < 395; x += sqSize) {
-          for (let y = FINISH_Y; y < FINISH_Y + 30; y += sqSize) {
+          for (let y = finishY; y < finishY + 30; y += sqSize) {
             const isWhite = ((Math.floor(x / sqSize)) + (Math.floor(y / sqSize))) % 2 === 0;
             ctx.fillStyle = isWhite ? '#ffffff' : '#0f172a';
             ctx.fillRect(x, y, sqSize, sqSize);
@@ -2107,16 +2324,16 @@ export default function MarbleRace({
         }
         ctx.strokeStyle = '#fbbf24';
         ctx.lineWidth = 3;
-        ctx.strokeRect(305, FINISH_Y, 90, 30);
+        ctx.strokeRect(305, finishY, 90, 30);
 
         ctx.fillStyle = '#fbbf24';
         ctx.font = 'black 15px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('🏁 GOAL 🏁', TRACK_WIDTH / 2, FINISH_Y - 8);
+        ctx.fillText('🏁 GOAL 🏁', TRACK_WIDTH / 2, finishY - 8);
 
         ctx.fillStyle = '#f87171';
         ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('⚠️ DANGER: FINAL ROTATING GATE BARRIER ⚠️', TRACK_WIDTH / 2, 3105);
+        ctx.fillText('⚠️ DANGER: FINAL ROTATING GATE BARRIER ⚠️', TRACK_WIDTH / 2, funnelTop + 25);
         ctx.restore();
       }
 
@@ -2400,11 +2617,11 @@ export default function MarbleRace({
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [raceState, numWinners, primaryColor, bombMode, mapTheme, winRule, students]);
+  }, [raceState, numWinners, primaryColor, bombMode, mapTheme, mapLength, winRule, students]);
 
   return (
     <div className="w-full max-w-4xl flex flex-col items-center select-none relative">
-      {/* Map Theme & Speed Selector Bar */}
+      {/* Map Theme, Length & Speed Selector Bar */}
       <div className="w-full bg-slate-900/80 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800/90 flex flex-wrap items-center justify-between gap-2.5 mb-3 shadow-xl z-20">
         <div className="flex flex-wrap items-center gap-1.5">
           <div className="flex items-center gap-1.5 text-xs font-black text-slate-300 mr-1">
@@ -2417,7 +2634,7 @@ export default function MarbleRace({
               onClick={() => {
                 if (raceState === 'ready') {
                   setMapTheme(theme.id);
-                  initTrack(theme.id);
+                  initTrack(theme.id, mapLengthRef.current);
                   initMarbles();
                 }
               }}
@@ -2433,6 +2650,38 @@ export default function MarbleRace({
             >
               <span>{theme.icon}</span>
               <span>{theme.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Map Length Selector (맵 길이: 짧게 / 중간 / 길게) */}
+        <div className="flex items-center gap-1 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800">
+          <Flag className="w-3.5 h-3.5 text-emerald-400" />
+          <span className="text-[11px] font-black text-slate-300 mr-0.5">길이</span>
+          {MAP_LENGTHS.map(len => (
+            <button
+              key={len.id}
+              type="button"
+              onClick={() => {
+                if (raceState === 'ready') {
+                  setMapLength(len.id);
+                  mapLengthRef.current = len.id;
+                  initTrack(mapTheme, len.id);
+                  initMarbles();
+                }
+              }}
+              disabled={raceState !== 'ready'}
+              className={cn(
+                "px-2 py-1 rounded-lg text-[11px] font-black transition-all flex items-center gap-1",
+                mapLength === len.id
+                  ? "bg-emerald-500 text-slate-950 shadow-md scale-105"
+                  : "text-slate-400 hover:text-white hover:bg-slate-800",
+                raceState !== 'ready' && "opacity-50 cursor-not-allowed"
+              )}
+              title={len.desc}
+            >
+              <span>{len.icon}</span>
+              <span>{len.name}</span>
             </button>
           ))}
         </div>
