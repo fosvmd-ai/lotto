@@ -108,6 +108,9 @@ export default function RunningRace({
   const [commentary, setCommentary] = useState<string>('출발선에서 심판의 신호를 기다리고 있습니다!');
   const [progressPct, setProgressPct] = useState<number>(0);
   const [winnersList, setWinnersList] = useState<string[]>([]);
+  const [finalStandings, setFinalStandings] = useState<string[] | null>(null);
+  const [popupCountdown, setPopupCountdown] = useState<number | null>(null);
+  const [popupPaused, setPopupPaused] = useState<boolean>(false);
 
   const speedRef = useRef<number>(initialSpeed);
   useEffect(() => {
@@ -215,6 +218,9 @@ export default function RunningRace({
     halfwayAnnouncedRef.current = false;
     finalStretchAnnouncedRef.current = false;
     setWinnersList([]);
+    setFinalStandings(null);
+    setPopupCountdown(null);
+    setPopupPaused(false);
     setProgressPct(0);
     setSlowMoReason('none');
     setLeaderName(shuffled[0]?.name || '');
@@ -230,6 +236,19 @@ export default function RunningRace({
       generateObstacles(runnersRef.current.length, trackLength);
     }
   }, [trackLength, generateObstacles]);
+
+  // Auto-proceed countdown for the final standings popup
+  useEffect(() => {
+    if (!finalStandings || popupCountdown === null || popupPaused) return;
+    if (popupCountdown <= 0) {
+      onRaceFinished(finalStandings);
+      return;
+    }
+    const timer = setTimeout(() => {
+      setPopupCountdown(prev => (prev !== null ? prev - 1 : null));
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [finalStandings, popupCountdown, popupPaused, onRaceFinished]);
 
   const spawnDust = (x: number, y: number, color = 'rgba(255,255,255,0.6)', count = 2) => {
     for (let i = 0; i < count; i++) {
@@ -836,9 +855,11 @@ export default function RunningRace({
                 phaseRef.current = 'finished';
                 setSlowMoReason('none');
                 if (!mutedRef.current) soundEngine.playWin('running');
+                const finalOrdered = [...determinedWinnersRef.current];
                 setTimeout(() => {
-                  onRaceFinished([...determinedWinnersRef.current]);
-                }, 1500);
+                  setFinalStandings(finalOrdered);
+                  setPopupCountdown(5);
+                }, 600);
               }
             } else {
               // Last-place mode: last `targetWinCount` finishers win!
@@ -859,8 +880,9 @@ export default function RunningRace({
                 if (!mutedRef.current) soundEngine.playWin('running');
                 const finalOrdered = [...determinedWinnersRef.current].reverse();
                 setTimeout(() => {
-                  onRaceFinished(finalOrdered);
-                }, 1500);
+                  setFinalStandings(finalOrdered);
+                  setPopupCountdown(5);
+                }, 600);
               }
             }
           }
@@ -1361,6 +1383,73 @@ export default function RunningRace({
             <div className="bg-slate-950/80 backdrop-blur-sm text-amber-300 border border-amber-400/60 font-black text-sm sm:text-base px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2">
               <span>🔥</span>
               <span>선두 역전! {leaderName}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Final Standings Popup */}
+        {phase === 'finished' && finalStandings && (
+          <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-30">
+            <div className="bg-white rounded-3xl shadow-2xl border-4 border-amber-400 overflow-hidden w-full max-w-md animate-in zoom-in-95 duration-200">
+              <div className="bg-amber-400 text-slate-950 px-6 py-4 text-center">
+                <p className="text-xs font-black uppercase tracking-wider opacity-80">
+                  {raceMode === 'first' ? '선착순 선발' : '꼴등 선발'} · 최종 {finalStandings.length}명
+                </p>
+                <h3 className="text-2xl font-black mt-0.5">🏁 최종 순위권 발표!</h3>
+              </div>
+
+              <div className="p-5 space-y-2.5 max-h-[300px] overflow-y-auto">
+                {finalStandings.map((name, idx) => {
+                  const medal = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : '🏅';
+                  return (
+                    <div
+                      key={`${name}-${idx}`}
+                      className={`flex items-center justify-between px-4 py-2.5 rounded-2xl border-2 ${
+                        idx === 0
+                          ? 'bg-amber-50 border-amber-400 shadow-sm'
+                          : idx === 1
+                            ? 'bg-slate-50 border-slate-300'
+                            : idx === 2
+                              ? 'bg-orange-50 border-orange-300'
+                              : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-xl">{medal}</span>
+                        <span className="text-xs font-black px-2 py-0.5 rounded-full bg-slate-900 text-white">
+                          {idx + 1}등
+                        </span>
+                        <span className="text-base font-black text-slate-900">{name}</span>
+                      </div>
+                      <span className="text-xs font-bold text-emerald-600">당첨!</span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="px-5 pb-5 pt-2 space-y-2.5 border-t border-slate-100">
+                <p className="text-center text-xs font-bold text-slate-500">
+                  {popupPaused
+                    ? '자동 이동이 일시정지되었습니다.'
+                    : `${popupCountdown ?? 0}초 후 최종 결과 화면으로 이동합니다.`}
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPopupPaused(prev => !prev)}
+                    className="flex-1 py-2.5 px-3 rounded-xl border-2 border-slate-300 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    {popupPaused ? '자동 이동 재개' : '잠깐 계속 보기'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onRaceFinished(finalStandings)}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#d8432b] hover:bg-[#b9331d] text-white font-black text-sm shadow-md transition-all cursor-pointer"
+                  >
+                    결과 화면으로
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
