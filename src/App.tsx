@@ -1222,13 +1222,13 @@ function TeacherView({ students, entries, gameState, admins, user }: {
         </div>
 
         <div className="md:col-span-2">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-2">
             <label className="block text-[10px] font-bold text-slate-400 uppercase">룰렛 / 추첨 배속 ({drawSpeed}x)</label>
             <span className="text-[10px] text-amber-500 font-bold flex items-center gap-0.5">
-              <Zap className="w-3 h-3" /> 속도 조절
+              <Zap className="w-3 h-3" /> 버튼 또는 슬라이더로 세밀 조절
             </span>
           </div>
-          <div className="flex items-center gap-1.5 h-12">
+          <div className="flex items-center gap-1.5 mb-2">
             {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
               <button
                 key={spd}
@@ -1238,7 +1238,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                   saveQuickDrawConfig({ drawSpeed: spd });
                 }}
                 className={cn(
-                  "flex-1 h-9 rounded-xl text-xs font-black transition-all border",
+                  "flex-1 h-8 rounded-xl text-xs font-black transition-all border",
                   drawSpeed === spd
                     ? "bg-amber-400 text-slate-950 border-amber-500 shadow-sm font-black"
                     : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
@@ -1247,6 +1247,22 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                 {spd}x
               </button>
             ))}
+          </div>
+          <div className="flex items-center gap-2.5 px-1">
+            <span className="text-[10px] font-bold text-slate-400 shrink-0">0.2x</span>
+            <input
+              type="range"
+              min="0.2"
+              max="5"
+              step="0.1"
+              value={drawSpeed}
+              onChange={(e) => setDrawSpeed(parseFloat(e.target.value))}
+              onMouseUp={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
+              onTouchEnd={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
+              onKeyUp={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
+              className="flex-1 accent-amber-500 cursor-pointer"
+            />
+            <span className="text-[10px] font-bold text-slate-400 shrink-0">5.0x</span>
           </div>
         </div>
 
@@ -3237,25 +3253,49 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
             {audioUnlocked && <p className="text-[10px] text-green-500 uppercase tracking-widest font-bold flex items-center gap-1">Audio Ready <CheckCircle2 className="w-2 h-2" /></p>}
 
             {/* Live Roulette / Drawing Speed Multiplier Bar */}
-            <div className="flex items-center gap-1 bg-slate-900/90 backdrop-blur-md px-3 py-1 rounded-2xl border border-slate-800 shadow-lg">
-              <Zap className="w-3.5 h-3.5 text-amber-400" />
-              <span className="text-[11px] font-black text-slate-300 mr-1">배속</span>
-              {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
-                <button
-                  key={spd}
-                  type="button"
-                  onClick={() => changeSpeed(spd)}
-                  className={cn(
-                    "px-2 py-0.5 rounded-lg text-xs font-black transition-all",
-                    drawSpeed === spd
-                      ? "bg-amber-400 text-slate-950 shadow-sm font-black scale-105"
-                      : "text-slate-400 hover:text-white hover:bg-slate-800"
-                  )}
-                  title={`추첨 배속 ${spd}x 설정`}
-                >
-                  {spd}x
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-800 shadow-lg">
+              <div className="flex items-center gap-1">
+                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-[11px] font-black text-slate-300 mr-1">배속</span>
+                {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
+                  <button
+                    key={spd}
+                    type="button"
+                    onClick={() => changeSpeed(spd)}
+                    className={cn(
+                      "px-2 py-0.5 rounded-lg text-xs font-black transition-all",
+                      drawSpeed === spd
+                        ? "bg-amber-400 text-slate-950 shadow-sm font-black scale-105"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                    title={`추첨 배속 ${spd}x 설정`}
+                  >
+                    {spd}x
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
+                <input
+                  type="range"
+                  min="0.2"
+                  max="5"
+                  step="0.1"
+                  value={drawSpeed}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    setDrawSpeed(val);
+                    drawSpeedRef.current = val;
+                  }}
+                  onMouseUp={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
+                  onTouchEnd={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
+                  onKeyUp={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
+                  className="w-24 sm:w-28 accent-amber-400 cursor-pointer"
+                  title="세밀한 배속 조절 (0.2x ~ 5.0x)"
+                />
+                <span className="text-xs font-black text-amber-400 min-w-[36px] text-right">
+                  {drawSpeed.toFixed(1)}x
+                </span>
+              </div>
             </div>
           </div>
 
