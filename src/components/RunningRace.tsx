@@ -51,7 +51,7 @@ interface Runner {
   tripTimer: number;
   color: string;
   hairColor: string;
-  gimmick: 'none' | 'spurt' | 'stumble';
+  gimmick: 'none' | 'spurt' | 'superSpurt' | 'stumble' | 'longStop';
   gimmickTimer: number;
   bubbleText: string;
   bubbleTimer: number;
@@ -82,7 +82,9 @@ const JERSEY_COLORS = [
 const HAIR_COLORS = ['#1e293b', '#451a03', '#78350f', '#312e81', '#0f172a'];
 
 const SPURT_TEXTS = ['스퍼트!', '가즈아!', '부스터!', '초고속!', '비켜비켜!'];
+const SUPER_SPURT_TEXTS = ['대역전!!', '후방 터보!', '비켜라!!', '초각성!'];
 const STUMBLE_TEXTS = ['어? 이쪽?', '잠깐만!', '신발끈!', '꿀맛!', '꽈당!'];
+const LONG_STOP_TEXTS = ['헉헉... 휴식!', '신발끈 풀림!', '잠깐 멈춤!', '쥐났다!!'];
 
 const BUNTING_COLORS = ['#ef4444', '#facc15', '#3b82f6', '#22c55e', '#ec4899', '#f97316'];
 
@@ -437,21 +439,24 @@ export default function RunningRace({
       // Apply vertical jump offset
       ctx.translate(0, r.jumpY);
 
-      // Spurt afterimage
-      if (r.gimmick === 'spurt' && !r.finished) {
-        for (let i = 1; i <= 3; i++) {
-          ctx.fillStyle = `rgba(56, 189, 248, ${0.28 - i * 0.07})`;
+      // Spurt / SuperSpurt afterimage
+      if ((r.gimmick === 'spurt' || r.gimmick === 'superSpurt') && !r.finished) {
+        const isSuper = r.gimmick === 'superSpurt';
+        for (let i = 1; i <= (isSuper ? 5 : 3); i++) {
+          ctx.fillStyle = isSuper
+            ? `rgba(250, 204, 21, ${0.38 - i * 0.06})`
+            : `rgba(56, 189, 248, ${0.28 - i * 0.07})`;
           ctx.beginPath();
-          ctx.arc(-i * 12, 0, 11, 0, Math.PI * 2);
+          ctx.arc(-i * 12, 0, isSuper ? 13 : 11, 0, Math.PI * 2);
           ctx.fill();
         }
         // Speed lines
-        ctx.strokeStyle = '#38bdf8';
-        ctx.lineWidth = 2;
-        for (let i = 0; i < 3; i++) {
+        ctx.strokeStyle = isSuper ? '#facc15' : '#38bdf8';
+        ctx.lineWidth = isSuper ? 2.5 : 2;
+        for (let i = 0; i < (isSuper ? 4 : 3); i++) {
           ctx.beginPath();
-          ctx.moveTo(-18 - i * 6, -8 + i * 7);
-          ctx.lineTo(-34 - i * 6, -8 + i * 7);
+          ctx.moveTo(-18 - i * 6, -10 + i * 6);
+          ctx.lineTo(-38 - i * 6, -10 + i * 6);
           ctx.stroke();
         }
       }
@@ -509,13 +514,18 @@ export default function RunningRace({
       ctx.arc(0, -15, 8, Math.PI, Math.PI * 2);
       ctx.fill();
 
-      // Sweat drops if stumbling
-      if (r.gimmick === 'stumble') {
-        ctx.fillStyle = '#38bdf8';
+      // Sweat drops if stumbling or long-stopped
+      if (r.gimmick === 'stumble' || r.gimmick === 'longStop') {
+        ctx.fillStyle = r.gimmick === 'longStop' ? '#a855f7' : '#38bdf8';
         ctx.beginPath();
         ctx.arc(-10, -16, 2.5, 0, Math.PI * 2);
-        ctx.arc(10, -13, 2, 0, Math.PI * 2);
+        ctx.arc(10, -13, 2.5, 0, Math.PI * 2);
         ctx.fill();
+        if (r.gimmick === 'longStop') {
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText('💫', 0, -24);
+        }
       }
 
       ctx.restore();
@@ -564,7 +574,14 @@ export default function RunningRace({
         const bh = 22;
         const bx = 14;
         const by = placeBeside ? -bh / 2 - 2 : -44;
-        ctx.fillStyle = r.gimmick === 'spurt' ? '#0284c7' : '#e11d48';
+        ctx.fillStyle =
+          r.gimmick === 'superSpurt'
+            ? '#d97706'
+            : r.gimmick === 'spurt'
+              ? '#0284c7'
+              : r.gimmick === 'longStop'
+                ? '#7c3aed'
+                : '#e11d48';
         ctx.beginPath();
         ctx.roundRect(bx, by, bw, bh, 8);
         ctx.fill();
@@ -637,35 +654,67 @@ export default function RunningRace({
         const timeScale = slowFactor * speedRef.current;
         const step = dt * 60 * timeScale;
 
+        const sortedUnfinishedList = [...unfinished].sort((a, b) => b.x - a.x);
+        const leaderX = sortedUnfinishedList[0]?.x || START_X;
+
         for (const r of runners) {
           if (r.finished) continue;
 
-          // Trigger random gimmicks
+          const rankIdx = sortedUnfinishedList.findIndex(u => u.id === r.id);
+          const gapFromLeader = leaderX - r.x;
+          const isTrailingPack = unfinished.length > 2 && rankIdx >= Math.floor(unfinished.length * 0.45);
+          const isTopPack = unfinished.length > 2 && rankIdx <= Math.max(1, Math.floor(unfinished.length * 0.25));
+
+          // Trigger dynamic comeback / collapse / random gimmicks
           if (r.gimmickTimer > 0) {
             r.gimmickTimer -= step;
             if (r.gimmickTimer <= 0) {
               r.gimmick = 'none';
             }
-          } else if (r.x > START_X + 120 && r.x < FINISH_X - 180 && Math.random() < 0.0045 * step) {
-            if (Math.random() < 0.58) {
-              r.gimmick = 'spurt';
-              r.gimmickTimer = 55 + Math.random() * 35;
-              r.bubbleText = SPURT_TEXTS[Math.floor(Math.random() * SPURT_TEXTS.length)];
-              r.bubbleTimer = 65;
+          } else if (r.x > START_X + 110 && r.x < FINISH_X - 130) {
+            if (isTrailingPack && gapFromLeader > 85 && Math.random() < 0.0115 * step) {
+              // Underdog mega-spurt comeback!
+              r.gimmick = 'superSpurt';
+              r.gimmickTimer = 88 + Math.random() * 35;
+              r.bubbleText = SUPER_SPURT_TEXTS[Math.floor(Math.random() * SUPER_SPURT_TEXTS.length)];
+              r.bubbleTimer = 85;
               if (!mutedRef.current) soundEngine.playSpurt();
-              if (now - lastCommentaryTimeRef.current > 950) {
+              if (now - lastCommentaryTimeRef.current > 900) {
                 lastCommentaryTimeRef.current = now;
-                setCommentary(`💨 ${r.name} 폭풍 스퍼트 발동! ("${r.bubbleText}")`);
+                setCommentary(`🚀 대역전극! 하위권 ${r.name} 선수가 폭풍 터보로 치고 올라옵니다!`);
               }
-            } else {
-              r.gimmick = 'stumble';
-              r.gimmickTimer = 42 + Math.random() * 28;
-              r.bubbleText = STUMBLE_TEXTS[Math.floor(Math.random() * STUMBLE_TEXTS.length)];
-              r.bubbleTimer = 65;
+            } else if (isTopPack && r.x > START_X + 170 && Math.random() < (gapFromLeader === 0 ? 0.0075 : 0.0055) * step) {
+              // Leader long stop / exhaustion / shoe untied!
+              r.gimmick = 'longStop';
+              r.gimmickTimer = 95 + Math.random() * 50;
+              r.bubbleText = LONG_STOP_TEXTS[Math.floor(Math.random() * LONG_STOP_TEXTS.length)];
+              r.bubbleTimer = 95;
               if (!mutedRef.current) soundEngine.playStumble();
-              if (now - lastCommentaryTimeRef.current > 950) {
+              if (now - lastCommentaryTimeRef.current > 900) {
                 lastCommentaryTimeRef.current = now;
-                setCommentary(`💦 아이고! ${r.name} 잠시 주춤합니다! ("${r.bubbleText}")`);
+                setCommentary(`😱 대위기! 선두권 ${r.name} 선수가 갑자기 멈춰 섰습니다! 하위권 추격 기회!`);
+              }
+            } else if (Math.random() < 0.005 * step) {
+              if (Math.random() < 0.56) {
+                r.gimmick = 'spurt';
+                r.gimmickTimer = 55 + Math.random() * 35;
+                r.bubbleText = SPURT_TEXTS[Math.floor(Math.random() * SPURT_TEXTS.length)];
+                r.bubbleTimer = 65;
+                if (!mutedRef.current) soundEngine.playSpurt();
+                if (now - lastCommentaryTimeRef.current > 950) {
+                  lastCommentaryTimeRef.current = now;
+                  setCommentary(`💨 ${r.name} 폭풍 스퍼트 발동! ("${r.bubbleText}")`);
+                }
+              } else {
+                r.gimmick = 'stumble';
+                r.gimmickTimer = 42 + Math.random() * 28;
+                r.bubbleText = STUMBLE_TEXTS[Math.floor(Math.random() * STUMBLE_TEXTS.length)];
+                r.bubbleTimer = 65;
+                if (!mutedRef.current) soundEngine.playStumble();
+                if (now - lastCommentaryTimeRef.current > 950) {
+                  lastCommentaryTimeRef.current = now;
+                  setCommentary(`💦 아이고! ${r.name} 잠시 주춤합니다! ("${r.bubbleText}")`);
+                }
               }
             }
           }
@@ -736,12 +785,14 @@ export default function RunningRace({
             }
           }
 
-          // Target speed calculation
-          const jitter = (Math.random() - 0.48) * 0.22;
-          r.baseSpeed = Math.max(1.75, Math.min(3.35, r.baseSpeed + jitter * 0.18 * step));
+          // Target speed calculation with wide momentum swings
+          const jitter = (Math.random() - 0.48) * 0.28;
+          r.baseSpeed = Math.max(1.55, Math.min(3.65, r.baseSpeed + jitter * 0.22 * step));
           let targetVx = r.baseSpeed;
-          if (r.gimmick === 'spurt') targetVx *= 1.55;
-          if (r.gimmick === 'stumble') targetVx *= 0.42;
+          if (r.gimmick === 'superSpurt') targetVx *= 2.1;
+          else if (r.gimmick === 'spurt') targetVx *= 1.58;
+          else if (r.gimmick === 'stumble') targetVx *= 0.36;
+          else if (r.gimmick === 'longStop') targetVx = 0.05;
 
           r.vx += (targetVx - r.vx) * Math.min(1, 0.12 * step);
           r.x += r.vx * step;
