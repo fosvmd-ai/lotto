@@ -21,10 +21,11 @@ type RaceMode = 'first' | 'last';
 type RacePhase = 'ready' | 'countdown' | 'racing' | 'finished';
 
 const TRACK_LENGTH_PRESETS = [
-  { label: '짧게', value: 1600 },
-  { label: '보통', value: 2600 },
-  { label: '길게', value: 4200 },
-  { label: '마라톤', value: 6000 },
+  { label: '더 짧게', value: 900 },
+  { label: '짧게', value: 2600 },
+  { label: '보통', value: 5200 },
+  { label: '길게', value: 8400 },
+  { label: '마라톤', value: 12000 },
 ];
 
 type ObstacleType = 'hurdle' | 'tire' | 'puddle' | 'cone';
@@ -99,7 +100,7 @@ export default function RunningRace({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [raceMode, setRaceMode] = useState<RaceMode>('first');
-  const [trackLength, setTrackLength] = useState<number>(2600);
+  const [trackLength, setTrackLength] = useState<number>(5200);
   const [phase, setPhase] = useState<RacePhase>('ready');
   const [countdownText, setCountdownText] = useState<string>('');
   const [isMuted, setIsMuted] = useState(false);
@@ -1331,14 +1332,14 @@ export default function RunningRace({
                 </div>
                 <input
                   type="range"
-                  min={1200}
-                  max={6500}
+                  min={800}
+                  max={12000}
                   step={100}
                   value={trackLength}
                   onChange={(e) => setTrackLength(parseInt(e.target.value, 10))}
                   className="w-full accent-[#d8432b] mb-2"
                 />
-                <div className="grid grid-cols-4 gap-1.5">
+                <div className="grid grid-cols-5 gap-1.5">
                   {TRACK_LENGTH_PRESETS.map(preset => (
                     <button
                       key={preset.value}
