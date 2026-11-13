@@ -87,7 +87,7 @@ export default function RunningRace({
   const [phase, setPhase] = useState<RacePhase>('ready');
   const [countdownText, setCountdownText] = useState<string>('');
   const [isMuted, setIsMuted] = useState(false);
-  const [isSlowMo, setIsSlowMo] = useState(false);
+  const [slowMoReason, setSlowMoReason] = useState<'none' | 'lead' | 'finish'>('none');
   const [leaderName, setLeaderName] = useState<string>(students[0]?.name || '');
   const [commentary, setCommentary] = useState<string>('출발선에서 심판의 신호를 기다리고 있습니다!');
   const [progressPct, setProgressPct] = useState<number>(0);
@@ -121,6 +121,11 @@ export default function RunningRace({
   const animFrameRef = useRef<number | null>(null);
   const lastCommentaryTimeRef = useRef<number>(0);
   const finishTriggeredRef = useRef<boolean>(false);
+  const lastLeaderIdRef = useRef<string | null>(null);
+  const leadChangeSlowMoRef = useRef<number>(0);
+  const lastLeadChangeAtRef = useRef<number>(0);
+  const halfwayAnnouncedRef = useRef<boolean>(false);
+  const finalStretchAnnouncedRef = useRef<boolean>(false);
 
   const START_X = 110;
   const getFinishX = useCallback(() => trackLengthRef.current, []);
@@ -153,9 +158,14 @@ export default function RunningRace({
     finishedCountRef.current = 0;
     determinedWinnersRef.current = [];
     finishTriggeredRef.current = false;
+    lastLeaderIdRef.current = null;
+    leadChangeSlowMoRef.current = 0;
+    lastLeadChangeAtRef.current = 0;
+    halfwayAnnouncedRef.current = false;
+    finalStretchAnnouncedRef.current = false;
     setWinnersList([]);
     setProgressPct(0);
-    setIsSlowMo(false);
+    setSlowMoReason('none');
     setLeaderName(shuffled[0]?.name || '');
     setCommentary('출발선에서 심판의 신호를 기다리고 있습니다!');
   }, [students]);
@@ -382,41 +392,50 @@ export default function RunningRace({
 
       ctx.restore();
 
-      // Leader Crown
+      // Leader Crown (scaled)
       if (isLeader && !r.finished) {
         ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('👑', 0, -40);
+        ctx.fillText('👑', 0, -28);
       }
 
-      // Name Pill Badge above runner
-      ctx.font = 'bold 11px "Pretendard", "Noto Sans KR", sans-serif';
+      // Restore scale before drawing name badge so names stay large & crisp!
+      ctx.restore();
+      ctx.save();
+      ctx.translate(screenX, screenY);
+
+      // Large Unscaled Name Pill Badge
+      ctx.font = '900 13px "Pretendard", "Noto Sans KR", sans-serif';
       const label = r.winRank > 0 ? `${r.winRank}등 ${r.name}` : r.name;
       const textWidth = ctx.measureText(label).width;
-      const pillW = Math.max(38, textWidth + 14);
-      const pillH = 19;
-      const pillY = -36;
+      const pillW = Math.max(46, textWidth + 16);
+      const pillH = 22;
+
+      // If lanes are spacious, place above; if many students, place cleanly beside runner
+      const placeBeside = laneHeight < 38;
+      const pillX = placeBeside ? -14 - pillW : -pillW / 2;
+      const pillY = placeBeside ? -pillH / 2 - 2 : -44;
 
       ctx.fillStyle = r.winRank > 0 ? '#facc15' : isLeader ? '#fef08a' : '#ffffff';
-      ctx.strokeStyle = r.winRank > 0 ? '#b45309' : '#334155';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = r.winRank > 0 ? '#b45309' : isLeader ? '#d97706' : '#1e293b';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(-pillW / 2, pillY, pillW, pillH, 6);
+      ctx.roundRect(pillX, pillY, pillW, pillH, 7);
       ctx.fill();
       ctx.stroke();
 
       ctx.fillStyle = '#0f172a';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(label, 0, pillY + pillH / 2 + 0.5);
+      ctx.fillText(label, pillX + pillW / 2, pillY + pillH / 2 + 0.5);
 
       // Speech Bubble (Gimmick)
       if (r.bubbleTimer > 0 && r.bubbleText) {
-        ctx.font = 'bold 11px "Pretendard", "Noto Sans KR", sans-serif';
-        const bw = ctx.measureText(r.bubbleText).width + 14;
-        const bh = 20;
+        ctx.font = '900 12px "Pretendard", "Noto Sans KR", sans-serif';
+        const bw = ctx.measureText(r.bubbleText).width + 16;
+        const bh = 22;
         const bx = 14;
-        const by = -44;
+        const by = placeBeside ? -bh / 2 - 2 : -44;
         ctx.fillStyle = r.gimmick === 'spurt' ? '#0284c7' : '#e11d48';
         ctx.beginPath();
         ctx.roundRect(bx, by, bw, bh, 8);
@@ -424,7 +443,7 @@ export default function RunningRace({
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
-        ctx.fillText(r.bubbleText, bx + 7, by + bh / 2);
+        ctx.fillText(r.bubbleText, bx + 8, by + bh / 2);
       }
 
       ctx.restore();
@@ -479,8 +498,15 @@ export default function RunningRace({
           }
         }
 
-        setIsSlowMo(slowMoActive);
-        const timeScale = (slowMoActive ? 0.25 : 1.0) * speedRef.current;
+        // Lead-change slow-mo countdown
+        if (leadChangeSlowMoRef.current > 0) {
+          leadChangeSlowMoRef.current = Math.max(0, leadChangeSlowMoRef.current - dt * 60);
+        }
+        const leadSlowMoActive = leadChangeSlowMoRef.current > 0;
+        setSlowMoReason(slowMoActive ? 'finish' : leadSlowMoActive ? 'lead' : 'none');
+
+        const slowFactor = slowMoActive ? 0.24 : leadSlowMoActive ? 0.3 : 1.0;
+        const timeScale = slowFactor * speedRef.current;
         const step = dt * 60 * timeScale;
 
         for (const r of runners) {
@@ -499,12 +525,20 @@ export default function RunningRace({
               r.bubbleText = SPURT_TEXTS[Math.floor(Math.random() * SPURT_TEXTS.length)];
               r.bubbleTimer = 65;
               if (!mutedRef.current) soundEngine.playSpurt();
+              if (now - lastCommentaryTimeRef.current > 950) {
+                lastCommentaryTimeRef.current = now;
+                setCommentary(`💨 ${r.name} 폭풍 스퍼트 발동! ("${r.bubbleText}")`);
+              }
             } else {
               r.gimmick = 'stumble';
               r.gimmickTimer = 42 + Math.random() * 28;
               r.bubbleText = STUMBLE_TEXTS[Math.floor(Math.random() * STUMBLE_TEXTS.length)];
               r.bubbleTimer = 65;
               if (!mutedRef.current) soundEngine.playStumble();
+              if (now - lastCommentaryTimeRef.current > 950) {
+                lastCommentaryTimeRef.current = now;
+                setCommentary(`💦 아이고! ${r.name} 잠시 주춤합니다! ("${r.bubbleText}")`);
+              }
             }
           }
 
@@ -551,7 +585,7 @@ export default function RunningRace({
                 finishTriggeredRef.current = true;
                 setPhase('finished');
                 phaseRef.current = 'finished';
-                setIsSlowMo(false);
+                setSlowMoReason('none');
                 if (!mutedRef.current) soundEngine.playWin('running');
                 setTimeout(() => {
                   onRaceFinished([...determinedWinnersRef.current]);
@@ -572,7 +606,7 @@ export default function RunningRace({
                 finishTriggeredRef.current = true;
                 setPhase('finished');
                 phaseRef.current = 'finished';
-                setIsSlowMo(false);
+                setSlowMoReason('none');
                 if (!mutedRef.current) soundEngine.playWin('running');
                 const finalOrdered = [...determinedWinnersRef.current].reverse();
                 setTimeout(() => {
@@ -583,29 +617,64 @@ export default function RunningRace({
           }
         }
 
-        // Update leader & commentary periodically
+        // Update leader, lead-change slow-mo & live commentary
         const sortedByX = [...runners].sort((a, b) => b.x - a.x);
         const currentFocus =
           raceModeRef.current === 'first'
-            ? sortedByX[0]
+            ? sortedByX.find(r => !r.finished) || sortedByX[0]
             : [...runners].filter(r => !r.finished).sort((a, b) => a.x - b.x)[0] || sortedByX[sortedByX.length - 1];
 
         if (currentFocus) {
+          const prevLeaderId = lastLeaderIdRef.current;
+          const prevLeader = prevLeaderId ? runners.find(r => r.id === prevLeaderId) : null;
+          if (
+            prevLeaderId &&
+            currentFocus.id !== prevLeaderId &&
+            !slowMoActive &&
+            currentFocus.x > START_X + 110 &&
+            now - lastLeadChangeAtRef.current > 1800
+          ) {
+            leadChangeSlowMoRef.current = 45;
+            lastLeadChangeAtRef.current = now;
+            lastCommentaryTimeRef.current = now;
+            if (!mutedRef.current) soundEngine.playSlowMoWhoosh();
+            const roleLabel = raceModeRef.current === 'first' ? '선두' : '꼴등 자리';
+            setCommentary(
+              prevLeader
+                ? `🔥 역전! ${currentFocus.name} 선수가 ${prevLeader.name}을(를) 제치고 ${roleLabel}에 올라섭니다!`
+                : `🔥 ${currentFocus.name} 선수가 새로운 ${roleLabel}로 올라섭니다!`
+            );
+          }
+          lastLeaderIdRef.current = currentFocus.id;
           setLeaderName(currentFocus.name);
+
           const pct = Math.min(100, Math.max(0, Math.round(((currentFocus.x - START_X) / (FINISH_X - START_X)) * 100)));
           setProgressPct(pct);
 
-          if (now - lastCommentaryTimeRef.current > 1800) {
+          if (!halfwayAnnouncedRef.current && pct >= 50) {
+            halfwayAnnouncedRef.current = true;
             lastCommentaryTimeRef.current = now;
-            if (raceModeRef.current === 'first') {
+            setCommentary(`📢 반환점 통과! 현재 선두는 ${sortedByX[0]?.name} 선수입니다!`);
+          } else if (!finalStretchAnnouncedRef.current && pct >= 80) {
+            finalStretchAnnouncedRef.current = true;
+            lastCommentaryTimeRef.current = now;
+            setCommentary(`🚨 막판 스퍼트 구간! 결승선이 코앞으로 다가왔습니다!`);
+          } else if (now - lastCommentaryTimeRef.current > 1500) {
+            lastCommentaryTimeRef.current = now;
+            if (slowMoActive) {
+              setCommentary(`📸 초접전 결승 슬로우 모션! 과연 결승 테이프를 끊을 주인공은?!`);
+            } else if (raceModeRef.current === 'first') {
               const second = sortedByX[1];
-              if (second && Math.abs(sortedByX[0].x - second.x) < 45) {
-                setCommentary(`${sortedByX[0].name}와(과) ${second.name}의 치열한 선두 다툼!`);
+              const third = sortedByX[2];
+              if (second && Math.abs(sortedByX[0].x - second.x) < 42) {
+                setCommentary(`⚔️ ${sortedByX[0].name} vs ${second.name}! 숨 막히는 초접전 선두 경쟁!`);
+              } else if (second && third) {
+                setCommentary(`🏃 1위 ${sortedByX[0].name} 독주! ${second.name}, ${third.name} 선수가 바짝 뒤쫓습니다!`);
               } else {
-                setCommentary(`${sortedByX[0].name} 선두 질주 중!`);
+                setCommentary(`🏃 ${sortedByX[0].name} 선수, 힘차게 선두를 달리고 있습니다!`);
               }
             } else {
-              setCommentary(`${currentFocus.name} 마지막 결승을 향해 달리는 중!`);
+              setCommentary(`🐢 ${currentFocus.name} 선수, 마지막까지 포기하지 않고 달리고 있습니다!`);
             }
           }
         }
@@ -823,10 +892,10 @@ export default function RunningRace({
             <span>{raceMode === 'first' ? '1등' : '꼴등'} {leaderName}</span>
           </div>
 
-          {isSlowMo && (
+          {slowMoReason !== 'none' && (
             <div className="bg-rose-500 text-white font-black px-3 py-1.5 rounded-xl text-xs animate-pulse flex items-center gap-1 shadow">
               <Zap className="w-3.5 h-3.5" />
-              <span>느린 화면</span>
+              <span>{slowMoReason === 'lead' ? '선두 역전! 슬로우 모션' : '결승! 느린 화면'}</span>
             </div>
           )}
 
@@ -996,13 +1065,16 @@ export default function RunningRace({
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-3 text-xs">
-          <div className="bg-white/10 text-white px-3 py-1.5 rounded-xl font-bold flex items-center gap-1.5 truncate">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="truncate">{commentary}</span>
+        <div className="flex items-center justify-between gap-3">
+          <div className="bg-white/10 border border-white/10 text-white px-3.5 py-2 rounded-xl font-bold flex items-center gap-2 min-w-0 flex-1">
+            <span className="bg-rose-500 text-white text-[10px] font-black px-2 py-0.5 rounded-md shrink-0 animate-pulse">
+              LIVE 중계
+            </span>
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="truncate text-sm sm:text-base font-black text-amber-100">{commentary}</span>
           </div>
-          <span className="bg-emerald-500 text-slate-950 font-black px-3 py-1 rounded-xl shrink-0 flex items-center gap-1">
-            <Flag className="w-3 h-3" />
+          <span className="bg-emerald-500 text-slate-950 font-black px-3.5 py-2 rounded-xl shrink-0 flex items-center gap-1 text-xs sm:text-sm">
+            <Flag className="w-3.5 h-3.5" />
             결승! ({progressPct}%)
           </span>
         </div>
