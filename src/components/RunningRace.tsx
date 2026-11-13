@@ -19,7 +19,7 @@ interface RunningRaceProps {
 
 type RaceMode = 'first' | 'last';
 type RacePhase = 'ready' | 'countdown' | 'racing' | 'finished';
-type WeatherType = 'none' | 'lightning' | 'wind' | 'rain' | 'snow' | 'random';
+type WeatherType = 'none' | 'lightning' | 'wind' | 'rain' | 'snow' | 'ufo' | 'random';
 
 const WEATHER_PRESETS: { id: WeatherType; label: string; icon: string }[] = [
   { id: 'none', label: '맑음', icon: '☀️' },
@@ -27,6 +27,7 @@ const WEATHER_PRESETS: { id: WeatherType; label: string; icon: string }[] = [
   { id: 'wind', label: '강풍', icon: '💨' },
   { id: 'rain', label: '폭우', icon: '🌧️' },
   { id: 'snow', label: '폭설', icon: '❄️' },
+  { id: 'ufo', label: 'UFO', icon: '🛸' },
   { id: 'random', label: '랜덤', icon: '🎲' },
 ];
 
@@ -152,8 +153,18 @@ export default function RunningRace({
   const lightningStrikesRef = useRef<{ x: number; y: number; timer: number }[]>([]);
   const weatherDropsRef = useRef<{ x: number; y: number; speed: number; size: number }[]>([]);
   const windGustTimerRef = useRef<number>(0);
-  const activeRandomWeatherRef = useRef<'lightning' | 'wind' | 'rain' | 'snow'>('rain');
+  const activeRandomWeatherRef = useRef<'lightning' | 'wind' | 'rain' | 'snow' | 'ufo'>('rain');
   const lastRandomWeatherSwitchRef = useRef<number>(0);
+  const ufoAbductionRef = useRef<{
+    runnerId: string;
+    phase: 'beamUp' | 'fly' | 'beamDown';
+    timer: number;
+    startX: number;
+    targetX: number;
+    currentX: number;
+    liftY: number;
+    isForward: boolean;
+  } | null>(null);
   const cameraRef = useRef<{ x: number; y: number; zoom: number; pivotX: number; pivotY: number }>({
     x: 0,
     y: 0,
@@ -243,6 +254,7 @@ export default function RunningRace({
       size: 2 + Math.random() * 3,
     }));
     windGustTimerRef.current = 0;
+    ufoAbductionRef.current = null;
     cameraRef.current = { x: 0, y: 0, zoom: 1, pivotX: 0.5, pivotY: 0.5 };
     tapeBrokenRef.current = false;
     finishedCountRef.current = 0;
@@ -759,10 +771,84 @@ export default function RunningRace({
         if (activeWeather === 'random') {
           if (now - lastRandomWeatherSwitchRef.current > 4200) {
             lastRandomWeatherSwitchRef.current = now;
-            const pool: ('lightning' | 'wind' | 'rain' | 'snow')[] = ['lightning', 'wind', 'rain', 'snow'];
+            const pool: ('lightning' | 'wind' | 'rain' | 'snow' | 'ufo')[] = ['lightning', 'wind', 'rain', 'snow', 'ufo'];
             activeRandomWeatherRef.current = pool[Math.floor(Math.random() * pool.length)];
           }
           activeWeather = activeRandomWeatherRef.current;
+        }
+
+        // UFO Abduction & Teleportation Logic
+        if (ufoAbductionRef.current) {
+          const ufo = ufoAbductionRef.current;
+          const victim = runners.find(r => r.id === ufo.runnerId);
+          if (!victim || victim.finished) {
+            ufoAbductionRef.current = null;
+          } else {
+            ufo.timer += step;
+            if (ufo.phase === 'beamUp') {
+              ufo.liftY = -Math.min(34, (ufo.timer / 26) * 34);
+              victim.x = ufo.startX;
+              victim.vx = 0;
+              if (ufo.timer >= 26) {
+                ufo.phase = 'fly';
+                ufo.timer = 0;
+              }
+            } else if (ufo.phase === 'fly') {
+              const t = Math.min(1, ufo.timer / 32);
+              const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+              ufo.currentX = ufo.startX + (ufo.targetX - ufo.startX) * eased;
+              victim.x = ufo.currentX;
+              victim.vx = 0;
+              if (ufo.timer >= 32) {
+                ufo.phase = 'beamDown';
+                ufo.timer = 0;
+              }
+            } else {
+              ufo.liftY = -Math.max(0, 34 * (1 - ufo.timer / 22));
+              victim.x = ufo.targetX;
+              victim.vx = 0;
+              if (ufo.timer >= 22) {
+                victim.bubbleText = ufo.isForward ? '개꿀 순간이동!' : '납치당했다ㅠ';
+                victim.bubbleTimer = 65;
+                spawnDust(victim.x, HEADER_HEIGHT + victim.lane * laneHeight + laneHeight * 0.58, '#22c55e', 8);
+                ufoAbductionRef.current = null;
+              }
+            }
+          }
+        } else if (activeWeather === 'ufo' && unfinished.length >= 2 && Math.random() < 0.011 * step) {
+          const candidates = unfinished.filter(r => r.x > START_X + 160 && r.x < FINISH_X - 200);
+          if (candidates.length > 0) {
+            const victim = candidates[Math.floor(Math.random() * candidates.length)];
+            const sortedUnf = [...unfinished].sort((a, b) => b.x - a.x);
+            const vRank = sortedUnf.findIndex(u => u.id === victim.id);
+            // Leaders more likely sent backward; trailing runners more likely beamed forward!
+            const isForward =
+              vRank < sortedUnf.length / 2 ? Math.random() < 0.25 : Math.random() < 0.78;
+            const jumpDist = 320 + Math.random() * Math.min(520, (FINISH_X - START_X) * 0.16);
+            const targetX = isForward
+              ? Math.min(FINISH_X - 150, victim.x + jumpDist)
+              : Math.max(START_X + 60, victim.x - jumpDist);
+
+            ufoAbductionRef.current = {
+              runnerId: victim.id,
+              phase: 'beamUp',
+              timer: 0,
+              startX: victim.x,
+              targetX,
+              currentX: victim.x,
+              liftY: 0,
+              isForward,
+            };
+            victim.bubbleText = '으악 UFO!!';
+            victim.bubbleTimer = 60;
+            if (!mutedRef.current) soundEngine.playWarpSound();
+            lastCommentaryTimeRef.current = now;
+            setCommentary(
+              isForward
+                ? `🛸 UFO 출현! ${victim.name} 선수가 납치되어 순식간에 앞쪽으로 이동합니다!`
+                : `🛸 UFO 습격! ${victim.name} 선수가 외계인에게 납치되어 뒤로 밀려납니다!`
+            );
+          }
         }
 
         if (windGustTimerRef.current > 0) {
@@ -779,7 +865,7 @@ export default function RunningRace({
         const leaderX = sortedUnfinishedList[0]?.x || START_X;
 
         for (const r of runners) {
-          if (r.finished) continue;
+          if (r.finished || ufoAbductionRef.current?.runnerId === r.id) continue;
 
           const rankIdx = sortedUnfinishedList.findIndex(u => u.id === r.id);
           const gapFromLeader = leaderX - r.x;
@@ -1337,7 +1423,9 @@ export default function RunningRace({
       const leaderId = focusRunner?.id;
       for (const r of runners) {
         const sx = r.x - camX;
-        const sy = HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58 - camY;
+        const isAbducted = ufoAbductionRef.current?.runnerId === r.id;
+        const liftOffset = isAbducted ? (ufoAbductionRef.current?.liftY || 0) : 0;
+        const sy = HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58 - camY + liftOffset;
         if (r.id === leaderId && leadChangeSlowMoRef.current > 0 && !r.finished) {
           // Soft spotlight ring around new leader during close-up
           const pulse = 1 + Math.sin(now * 0.015) * 0.12;
@@ -1350,6 +1438,53 @@ export default function RunningRace({
           ctx.restore();
         }
         drawRunner(r, sx, sy, r.id === leaderId, laneHeight, now);
+      }
+
+      // Draw UFO & Tractor Beam if abducting
+      if (ufoAbductionRef.current) {
+        const ufo = ufoAbductionRef.current;
+        const victim = runners.find(r => r.id === ufo.runnerId);
+        if (victim) {
+          const ux = ufo.currentX - camX;
+          const victimBaseY = HEADER_HEIGHT + victim.lane * laneHeight + laneHeight * 0.58 - camY;
+          const uy = Math.max(HEADER_HEIGHT - 16, victimBaseY - 76);
+
+          ctx.save();
+          // Green Tractor Beam Cone
+          const beamGrad = ctx.createLinearGradient(ux, uy + 10, ux, victimBaseY + 14);
+          beamGrad.addColorStop(0, 'rgba(34, 197, 94, 0.55)');
+          beamGrad.addColorStop(1, 'rgba(34, 197, 94, 0.08)');
+          ctx.fillStyle = beamGrad;
+          ctx.beginPath();
+          ctx.moveTo(ux - 10, uy + 10);
+          ctx.lineTo(ux + 10, uy + 10);
+          ctx.lineTo(ux + 28, victimBaseY + 14);
+          ctx.lineTo(ux - 28, victimBaseY + 14);
+          ctx.closePath();
+          ctx.fill();
+
+          // UFO Glass Dome
+          ctx.fillStyle = '#38bdf8';
+          ctx.beginPath();
+          ctx.ellipse(ux, uy - 4, 14, 10, 0, Math.PI, Math.PI * 2);
+          ctx.fill();
+          // UFO Metallic Saucer Body
+          ctx.fillStyle = '#475569';
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.ellipse(ux, uy + 3, 28, 9, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+          // Blinking Rim Lights
+          for (let l = -2; l <= 2; l++) {
+            ctx.fillStyle = (Math.floor(now / 120) + l) % 2 === 0 ? '#fde047' : '#22c55e';
+            ctx.beginPath();
+            ctx.arc(ux + l * 10, uy + 3, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        }
       }
 
       ctx.restore(); // end track clip
@@ -1593,7 +1728,7 @@ export default function RunningRace({
                     {WEATHER_PRESETS.find(w => w.id === weatherMode)?.icon} {WEATHER_PRESETS.find(w => w.id === weatherMode)?.label}
                   </span>
                 </div>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
                   {WEATHER_PRESETS.map(w => (
                     <button
                       key={w.id}
