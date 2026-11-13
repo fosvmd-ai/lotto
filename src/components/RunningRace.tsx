@@ -131,7 +131,13 @@ export default function RunningRace({
   const runnersRef = useRef<Runner[]>([]);
   const obstaclesRef = useRef<TrackObstacle[]>([]);
   const particlesRef = useRef<Particle[]>([]);
-  const cameraRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const cameraRef = useRef<{ x: number; y: number; zoom: number; pivotX: number; pivotY: number }>({
+    x: 0,
+    y: 0,
+    zoom: 1,
+    pivotX: 0.5,
+    pivotY: 0.5,
+  });
   const tapeBrokenRef = useRef<boolean>(false);
   const finishedCountRef = useRef<number>(0);
   const determinedWinnersRef = useRef<string[]>([]);
@@ -198,7 +204,7 @@ export default function RunningRace({
     }));
     generateObstacles(shuffled.length, getFinishX());
     particlesRef.current = [];
-    cameraRef.current = { x: 0, y: 0 };
+    cameraRef.current = { x: 0, y: 0, zoom: 1, pivotX: 0.5, pivotY: 0.5 };
     tapeBrokenRef.current = false;
     finishedCountRef.current = 0;
     determinedWinnersRef.current = [];
@@ -938,6 +944,33 @@ export default function RunningRace({
       const camX = cameraRef.current.x;
       const camY = 0;
 
+      // Smooth Close-Up Zoom on Lead Change or Photo Finish (tasteful & non-chaotic)
+      const isLeadZoom = phaseRef.current === 'racing' && leadChangeSlowMoRef.current > 0;
+      const isFinishZoom = phaseRef.current === 'racing' && slowMoActive;
+      const targetZoom = isLeadZoom ? 1.34 : isFinishZoom ? 1.22 : 1.0;
+      cameraRef.current.zoom += (targetZoom - cameraRef.current.zoom) * 0.085;
+      const zoom = cameraRef.current.zoom;
+
+      const focusScreenXNorm = focusRunner ? Math.max(0.15, Math.min(0.85, (focusRunner.x - camX) / W)) : 0.5;
+      const focusScreenYNorm = focusRunner
+        ? Math.max(0.2, Math.min(0.88, (HEADER_HEIGHT + focusRunner.lane * laneHeight + laneHeight * 0.58) / H))
+        : 0.5;
+      const targetPivotXNorm = isLeadZoom || isFinishZoom ? focusScreenXNorm : 0.5;
+      const targetPivotYNorm = isLeadZoom || isFinishZoom ? focusScreenYNorm : 0.5;
+      cameraRef.current.pivotX += (targetPivotXNorm - cameraRef.current.pivotX) * 0.1;
+      cameraRef.current.pivotY += (targetPivotYNorm - cameraRef.current.pivotY) * 0.1;
+
+      ctx.save();
+      if (zoom > 1.005) {
+        const rawPivotX = cameraRef.current.pivotX * W;
+        const rawPivotY = cameraRef.current.pivotY * H;
+        const clampedPivotX = Math.max(W / (2 * zoom), Math.min(W - W / (2 * zoom), rawPivotX));
+        const clampedPivotY = Math.max(H / (2 * zoom), Math.min(H - H / (2 * zoom), rawPivotY));
+        ctx.translate(W / 2, H / 2);
+        ctx.scale(zoom, zoom);
+        ctx.translate(-clampedPivotX, -clampedPivotY);
+      }
+
       // --- DRAW BACKGROUND ---
       // Sky
       ctx.fillStyle = '#cbe9f8';
@@ -1119,10 +1152,32 @@ export default function RunningRace({
       for (const r of runners) {
         const sx = r.x - camX;
         const sy = HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58 - camY;
+        if (r.id === leaderId && leadChangeSlowMoRef.current > 0 && !r.finished) {
+          // Soft spotlight ring around new leader during close-up
+          const pulse = 1 + Math.sin(now * 0.015) * 0.12;
+          ctx.save();
+          ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.ellipse(sx, sy + 6, 26 * pulse, 12 * pulse, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+        }
         drawRunner(r, sx, sy, r.id === leaderId, laneHeight);
       }
 
-      ctx.restore();
+      ctx.restore(); // end track clip
+      ctx.restore(); // end close-up camera zoom
+
+      // Subtle edge vignette during close-up (non-intrusive)
+      if (zoom > 1.02) {
+        const vignetteAlpha = Math.min(0.24, ((zoom - 1) / 0.34) * 0.24);
+        const grad = ctx.createRadialGradient(W / 2, H / 2, W * 0.28, W / 2, H / 2, W * 0.72);
+        grad.addColorStop(0, 'rgba(0,0,0,0)');
+        grad.addColorStop(1, `rgba(15, 23, 42, ${vignetteAlpha})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+      }
 
       animFrameRef.current = requestAnimationFrame(render);
     };
@@ -1296,6 +1351,16 @@ export default function RunningRace({
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="bg-amber-400 text-slate-950 font-black text-4xl sm:text-5xl px-8 py-4 rounded-3xl shadow-2xl border-4 border-white animate-bounce">
               {countdownText}
+            </div>
+          </div>
+        )}
+
+        {/* Clean Lead-Change Close-Up Pill */}
+        {phase === 'racing' && slowMoReason === 'lead' && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none">
+            <div className="bg-slate-950/80 backdrop-blur-sm text-amber-300 border border-amber-400/60 font-black text-sm sm:text-base px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2">
+              <span>🔥</span>
+              <span>선두 역전! {leaderName}</span>
             </div>
           </div>
         )}
