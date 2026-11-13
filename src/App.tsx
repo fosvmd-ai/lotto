@@ -54,7 +54,8 @@ import {
   Clock,
   Check,
   CheckCheck,
-  ShoppingBag
+  ShoppingBag,
+  Flag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
@@ -64,6 +65,7 @@ import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
 import soundEngine from './soundEngine';
 import MarbleRace, { MAP_THEMES, MapTheme, MAP_LENGTHS, MapLength } from './components/MarbleRace';
+import RunningRace from './components/RunningRace';
 import SlotMachineEffect from './components/effects/SlotMachineEffect';
 import SupernovaExplosionEffect from './components/effects/SupernovaExplosionEffect';
 import MythicCardEffect from './components/effects/MythicCardEffect';
@@ -137,7 +139,7 @@ interface GameState {
   round: number;
   numWinners: number;
   prizeCriteria: PrizeCriteria[];
-  drawEffect?: 'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble';
+  drawEffect?: 'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble' | 'running';
   marbleMapTheme?: MapTheme;
   marbleMapLength?: MapLength;
   drawSpeed?: number;
@@ -763,7 +765,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
   const [newStudentName, setNewStudentName] = useState('');
   const [showQr, setShowQr] = useState(false);
   const [numWinners, setNumWinners] = useState(gameState?.numWinners || 5);
-  const [drawEffect, setDrawEffect] = useState<'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble'>(gameState?.drawEffect || 'board');
+  const [drawEffect, setDrawEffect] = useState<'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble' | 'running'>(gameState?.drawEffect || 'board');
   const [marbleMapTheme, setMarbleMapTheme] = useState<MapTheme>(gameState?.marbleMapTheme || 'cosmic');
   const [marbleMapLength, setMarbleMapLength] = useState<MapLength>(gameState?.marbleMapLength || 'medium');
   const [drawSpeed, setDrawSpeed] = useState<number>(gameState?.drawSpeed || 1);
@@ -1255,10 +1257,11 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               <Volume2 className="w-3 h-3" /> 모드별 전용 효과음 지원
             </span>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2">
             {[
               { id: 'standard', name: '네온 코어', icon: <Atom className="w-5 h-5 text-indigo-400" /> },
               { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-5 h-5 text-amber-400" /> },
+              { id: 'running', name: '달리기 레이스', icon: <Flag className="w-5 h-5 text-orange-500" /> },
               { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-5 h-5 text-yellow-400" /> },
               { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-5 h-5 text-rose-500" /> },
               { id: 'card', name: '타로 카드', icon: <Crown className="w-5 h-5 text-purple-400" /> },
@@ -3207,6 +3210,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
             <span className="drop-shadow-lg">
               {effect === 'standard' && '네온 코어 퀀텀 추첨 중!'}
               {effect === 'marble' && '박진감 넘치는 구슬 레이스!'}
+              {effect === 'running' && '운동회 달리기 대작전!'}
               {effect === 'slot' && '라스베가스 777 잭팟 슬롯!'}
               {effect === 'explosion' && '코스믹 초신성 대폭발 추첨!'}
               {effect === 'card' && '운명의 3D 홀로그램 타로 플립!'}
@@ -3252,80 +3256,99 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
             </div>
           </div>
 
-          {effect === 'marble' ? (
-            <div className="w-full flex justify-center mb-12">
-              <MarbleRace 
-                students={students}
-                numWinners={gameState.numWinners || 5}
-                primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
-                initialMapTheme={gameState?.marbleMapTheme || 'cosmic'}
-                initialMapLength={gameState?.marbleMapLength || 'medium'}
-                initialSpeed={drawSpeed}
-                onWinnerDetermined={(winnerName, rank) => {
-                  setDrawn(prev => {
-                    const newDrawn = [...prev.filter(n => !isItemMatched(n, winnerName)), winnerName];
-                    setDoc(doc(db, 'gameState', adminEmail), {
-                      ...gameState,
-                      currentDrawn: newDrawn
-                    }, { merge: true });
-                    return newDrawn;
-                  });
-                }}
-                onRaceFinished={async (finalWinners) => {
-                  setDrawn(finalWinners);
-                  
-                  if (isAdmin && adminEmail) {
-                    const recordStats = async () => {
-                      const resultsByStudent: Record<string, { wins: Record<number, number>, totalPrize: number }> = {};
-                      entries.forEach(entry => {
-                        const evaluation = evaluateTicket(entry.picks, finalWinners, gameState.prizeCriteria || []);
-                        if (evaluation.rank > 0) {
-                          if (!resultsByStudent[entry.studentName]) {
-                            resultsByStudent[entry.studentName] = { wins: {}, totalPrize: 0 };
-                          }
-                          resultsByStudent[entry.studentName].wins[evaluation.rank] = (resultsByStudent[entry.studentName].wins[evaluation.rank] || 0) + 1;
-                          resultsByStudent[entry.studentName].totalPrize += evaluation.totalAmount;
-                        }
-                      });
+          {(() => {
+            const handleRaceWinnerDetermined = (winnerName: string) => {
+              setDrawn(prev => {
+                const newDrawn = [...prev.filter(n => !isItemMatched(n, winnerName)), winnerName];
+                setDoc(doc(db, 'gameState', adminEmail), {
+                  ...gameState,
+                  currentDrawn: newDrawn
+                }, { merge: true });
+                return newDrawn;
+              });
+            };
 
-                      const batch = writeBatch(db);
-                      let hasUpdates = false;
-                      Object.entries(resultsByStudent).forEach(([name, data]) => {
-                        const student = students.find(s => s.name === name);
-                        if (student) {
-                          const updates: any = {
-                            'stats.totalPrize': increment(data.totalPrize)
-                          };
-                          Object.entries(data.wins).forEach(([rank, count]) => {
-                            updates[`stats.wins.${rank}`] = increment(count);
-                          });
-                          batch.update(doc(db, 'students', student.id), updates);
-                          hasUpdates = true;
-                        }
-                      });
-                      if (hasUpdates) {
-                        try {
-                          await batch.commit();
-                          console.log("Recorded cumulative stats for marble winners");
-                        } catch (err) {
-                          console.error("Error recording cumulative stats:", err);
-                        }
-                      }
-                    };
-                    await recordStats();
+            const handleRaceFinished = async (finalWinners: string[]) => {
+              setDrawn(finalWinners);
+              if (isAdmin && adminEmail) {
+                const resultsByStudent: Record<string, { wins: Record<number, number>, totalPrize: number }> = {};
+                entries.forEach(entry => {
+                  const evaluation = evaluateTicket(entry.picks, finalWinners, gameState.prizeCriteria || []);
+                  if (evaluation.rank > 0) {
+                    if (!resultsByStudent[entry.studentName]) {
+                      resultsByStudent[entry.studentName] = { wins: {}, totalPrize: 0 };
+                    }
+                    resultsByStudent[entry.studentName].wins[evaluation.rank] = (resultsByStudent[entry.studentName].wins[evaluation.rank] || 0) + 1;
+                    resultsByStudent[entry.studentName].totalPrize += evaluation.totalAmount;
                   }
+                });
 
-                  setDoc(doc(db, 'gameState', adminEmail), {
-                    ...gameState,
-                    status: 'finished',
-                    winningNumbers: finalWinners,
-                    currentDrawn: finalWinners
-                  });
-                }}
-              />
-            </div>
-          ) : (
-            <div className="flex-1 flex flex-col items-center w-full">
+                const batch = writeBatch(db);
+                let hasUpdates = false;
+                Object.entries(resultsByStudent).forEach(([name, data]) => {
+                  const student = students.find(s => s.name === name);
+                  if (student) {
+                    const updates: any = {
+                      'stats.totalPrize': increment(data.totalPrize)
+                    };
+                    Object.entries(data.wins).forEach(([rank, count]) => {
+                      updates[`stats.wins.${rank}`] = increment(count);
+                    });
+                    batch.update(doc(db, 'students', student.id), updates);
+                    hasUpdates = true;
+                  }
+                });
+                if (hasUpdates) {
+                  try {
+                    await batch.commit();
+                  } catch (err) {
+                    console.error("Error recording cumulative stats:", err);
+                  }
+                }
+              }
+
+              setDoc(doc(db, 'gameState', adminEmail), {
+                ...gameState,
+                status: 'finished',
+                winningNumbers: finalWinners,
+                currentDrawn: finalWinners
+              });
+            };
+
+            if (effect === 'marble') {
+              return (
+                <div className="w-full flex justify-center mb-12">
+                  <MarbleRace 
+                    students={students}
+                    numWinners={gameState.numWinners || 5}
+                    primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+                    initialMapTheme={gameState?.marbleMapTheme || 'cosmic'}
+                    initialMapLength={gameState?.marbleMapLength || 'medium'}
+                    initialSpeed={drawSpeed}
+                    onWinnerDetermined={(winnerName) => handleRaceWinnerDetermined(winnerName)}
+                    onRaceFinished={handleRaceFinished}
+                  />
+                </div>
+              );
+            }
+
+            if (effect === 'running') {
+              return (
+                <div className="w-full flex justify-center mb-12">
+                  <RunningRace
+                    students={students}
+                    numWinners={gameState.numWinners || 5}
+                    primaryColor={gameState?.theme?.primaryColor || '#fbbf24'}
+                    initialSpeed={drawSpeed}
+                    onWinnerDetermined={(winnerName) => handleRaceWinnerDetermined(winnerName)}
+                    onRaceFinished={handleRaceFinished}
+                  />
+                </div>
+              );
+            }
+
+            return (
+              <div className="flex-1 flex flex-col items-center w-full">
             {/* Main Animation Area */}
             <div className={cn(
               "relative w-full flex items-center justify-center",
@@ -3490,7 +3513,8 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
         </motion.button>
       )}
       </div>
-          )}
+            );
+          })()}
         </div>
       </div>
     </div>

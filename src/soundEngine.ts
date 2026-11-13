@@ -182,6 +182,12 @@ class SoundEngine {
         this.playTone(marblePitch, 'sine', 0.03, 0, 0.2, marblePitch * 0.8);
         break;
       }
+      case 'running': {
+        // Crisp footstep / whistle cadence
+        this.playNoise(0.035, 'bandpass', 900 + Math.random() * 300, 0, 0.16);
+        this.playTone(220 + Math.random() * 60, 'triangle', 0.025, 0, 0.12, 120);
+        break;
+      }
       case 'standard':
       default: {
         // Classic wooden/plastic ball tick
@@ -258,6 +264,29 @@ class SoundEngine {
     this.playTone(280, 'sine', 1.0, 0, 0.2, 180);
   }
 
+  public playWhistle() {
+    if (!this.canPlaySound('whistle', 150)) return;
+    this.playTone(2600, 'sine', 0.18, 0, 0.28, 2850);
+    this.playTone(2720, 'triangle', 0.18, 0.02, 0.14, 2900);
+  }
+
+  public playStartingGun() {
+    if (!this.canPlaySound('gun', 300)) return;
+    this.playNoise(0.35, 'lowpass', 950, 0, 0.75);
+    this.playTone(180, 'sawtooth', 0.16, 0, 0.55, 45);
+    this.playTone(95, 'sine', 0.25, 0, 0.65, 30);
+  }
+
+  public playSpurt() {
+    if (!this.canPlaySound('spurt', 220)) return;
+    this.playTone(480, 'triangle', 0.14, 0, 0.22, 1180);
+  }
+
+  public playStumble() {
+    if (!this.canPlaySound('stumble', 220)) return;
+    this.playTone(340, 'sawtooth', 0.15, 0, 0.18, 120);
+  }
+
   public stopTick(effect: string) {
     // Clean up if any continuous sound is active
     if (this.continuousOsc) {
@@ -303,6 +332,9 @@ class SoundEngine {
         this.playBoardChimeWin();
         break;
       case 'marble':
+        this.playMarbleFinishWin();
+        break;
+      case 'running':
         this.playMarbleFinishWin();
         break;
       case 'standard':
