@@ -18,8 +18,14 @@ interface RunningRaceProps {
 }
 
 type RaceMode = 'first' | 'last';
-type RaceLength = 'normal' | 'long';
 type RacePhase = 'ready' | 'countdown' | 'racing' | 'finished';
+
+const TRACK_LENGTH_PRESETS = [
+  { label: '짧게', value: 1600 },
+  { label: '보통', value: 2600 },
+  { label: '길게', value: 4200 },
+  { label: '마라톤', value: 6000 },
+];
 
 interface Runner {
   id: string;
@@ -77,7 +83,7 @@ export default function RunningRace({
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const [raceMode, setRaceMode] = useState<RaceMode>('first');
-  const [raceLength, setRaceLength] = useState<RaceLength>('normal');
+  const [trackLength, setTrackLength] = useState<number>(2600);
   const [phase, setPhase] = useState<RacePhase>('ready');
   const [countdownText, setCountdownText] = useState<string>('');
   const [isMuted, setIsMuted] = useState(false);
@@ -100,8 +106,8 @@ export default function RunningRace({
   const raceModeRef = useRef<RaceMode>(raceMode);
   raceModeRef.current = raceMode;
 
-  const raceLengthRef = useRef<RaceLength>(raceLength);
-  raceLengthRef.current = raceLength;
+  const trackLengthRef = useRef<number>(trackLength);
+  trackLengthRef.current = trackLength;
 
   const phaseRef = useRef<RacePhase>(phase);
   phaseRef.current = phase;
@@ -117,9 +123,8 @@ export default function RunningRace({
   const finishTriggeredRef = useRef<boolean>(false);
 
   const START_X = 110;
-  const getFinishX = useCallback(() => (raceLengthRef.current === 'long' ? 4200 : 2600), []);
-  const LANE_HEIGHT = 46;
-  const HEADER_HEIGHT = 110; // Sky + bleachers + bunting
+  const getFinishX = useCallback(() => trackLengthRef.current, []);
+  const HEADER_HEIGHT = 98; // Sky + bleachers + bunting
 
   const initRunners = useCallback(() => {
     const shuffled = [...students].sort(() => Math.random() - 0.5);
@@ -287,9 +292,11 @@ export default function RunningRace({
       ctx.restore();
     };
 
-    const drawRunner = (r: Runner, screenX: number, screenY: number, isLeader: boolean) => {
+    const drawRunner = (r: Runner, screenX: number, screenY: number, isLeader: boolean, laneHeight: number) => {
+      const scale = Math.max(0.58, Math.min(1, laneHeight / 38));
       ctx.save();
       ctx.translate(screenX, screenY);
+      ctx.scale(scale, scale);
 
       // Spurt afterimage
       if (r.gimmick === 'spurt' && !r.finished) {
@@ -436,12 +443,15 @@ export default function RunningRace({
         }
       }
 
-      const W = canvas.width || 900;
-      const H = canvas.height || 480;
+      const W = canvas.width || 1100;
+      const H = canvas.height || 620;
       const FINISH_X = getFinishX();
       const runners = runnersRef.current;
       const totalLanes = Math.max(1, runners.length);
-      const trackTotalHeight = totalLanes * LANE_HEIGHT;
+      const availableTrackHeight = Math.max(160, H - HEADER_HEIGHT - 12);
+      // Fit ALL students vertically on one screen without clipping
+      const laneHeight = Math.max(18, Math.min(48, availableTrackHeight / totalLanes));
+      const trackTotalHeight = totalLanes * laneHeight;
 
       // Update Physics if racing
       let slowMoActive = false;
@@ -512,7 +522,7 @@ export default function RunningRace({
           r.phase += r.vx * 0.22 * step;
 
           if (Math.random() < 0.3 * step) {
-            spawnDust(r.x, HEADER_HEIGHT + r.lane * LANE_HEIGHT + LANE_HEIGHT * 0.5);
+            spawnDust(r.x, HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.55);
           }
 
           // Check Finish Line
@@ -611,15 +621,10 @@ export default function RunningRace({
       const maxCamX = Math.max(0, FINISH_X + 180 - W);
       const targetCamX = focusRunner ? Math.max(0, Math.min(maxCamX, focusRunner.x - W * 0.55)) : 0;
       cameraRef.current.x += (targetCamX - cameraRef.current.x) * 0.1;
-
-      const availableTrackH = Math.max(120, H - HEADER_HEIGHT - 54);
-      const maxCamY = Math.max(0, trackTotalHeight - availableTrackH);
-      const focusLaneY = focusRunner ? focusRunner.lane * LANE_HEIGHT : 0;
-      const targetCamY = Math.max(0, Math.min(maxCamY, focusLaneY - availableTrackH * 0.45));
-      cameraRef.current.y += (targetCamY - cameraRef.current.y) * 0.08;
+      cameraRef.current.y = 0;
 
       const camX = cameraRef.current.x;
-      const camY = cameraRef.current.y;
+      const camY = 0;
 
       // --- DRAW BACKGROUND ---
       // Sky
@@ -685,28 +690,28 @@ export default function RunningRace({
 
       // Lanes
       for (let i = 0; i < totalLanes; i++) {
-        const laneY = HEADER_HEIGHT + i * LANE_HEIGHT - camY;
-        if (laneY + LANE_HEIGHT < HEADER_HEIGHT || laneY > H) continue;
+        const laneY = HEADER_HEIGHT + i * laneHeight - camY;
+        if (laneY + laneHeight < HEADER_HEIGHT || laneY > H) continue;
 
         ctx.fillStyle = i % 2 === 0 ? '#c9583c' : '#be4e33';
-        ctx.fillRect(0, laneY, W, LANE_HEIGHT);
+        ctx.fillRect(0, laneY, W, laneHeight);
 
         // White lane divider
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.72)';
-        ctx.lineWidth = 2;
+        ctx.lineWidth = laneHeight < 26 ? 1 : 2;
         ctx.beginPath();
-        ctx.moveTo(0, laneY + LANE_HEIGHT);
-        ctx.lineTo(W, laneY + LANE_HEIGHT);
+        ctx.moveTo(0, laneY + laneHeight);
+        ctx.lineTo(W, laneY + laneHeight);
         ctx.stroke();
 
         // Stenciled Lane Number
         const numX = START_X - 42 - camX;
         if (numX > -40 && numX < W + 40) {
-          ctx.fillStyle = 'rgba(255,255,255,0.45)';
-          ctx.font = '900 18px sans-serif';
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.font = `900 ${Math.max(10, Math.min(18, Math.floor(laneHeight * 0.45)))}px sans-serif`;
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(String(i + 1), numX, laneY + LANE_HEIGHT / 2);
+          ctx.fillText(String(i + 1), numX, laneY + laneHeight / 2);
         }
       }
 
@@ -793,9 +798,8 @@ export default function RunningRace({
       const leaderId = focusRunner?.id;
       for (const r of runners) {
         const sx = r.x - camX;
-        const sy = HEADER_HEIGHT + r.lane * LANE_HEIGHT + LANE_HEIGHT * 0.55 - camY;
-        if (sy < HEADER_HEIGHT - 30 || sy > H + 30) continue;
-        drawRunner(r, sx, sy, r.id === leaderId);
+        const sy = HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58 - camY;
+        drawRunner(r, sx, sy, r.id === leaderId, laneHeight);
       }
 
       ctx.restore();
@@ -810,7 +814,7 @@ export default function RunningRace({
   }, [getFinishX, numWinners, onRaceFinished, onWinnerDetermined, countdownText]);
 
   return (
-    <div className="w-full max-w-5xl mx-auto flex flex-col rounded-3xl overflow-hidden shadow-2xl border-4 border-amber-400/80 bg-slate-900 select-none">
+    <div className="w-full max-w-[1440px] mx-auto flex flex-col rounded-3xl overflow-hidden shadow-2xl border-4 border-amber-400/80 bg-slate-900 select-none">
       {/* Top HUD Bar */}
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r from-sky-600 via-sky-500 to-indigo-600 text-white">
         <div className="flex items-center gap-2.5 flex-wrap">
@@ -866,24 +870,18 @@ export default function RunningRace({
               </div>
 
               <div className="flex bg-black/20 p-1 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setRaceLength('normal')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    raceLength === 'normal' ? 'bg-white text-slate-900' : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  보통
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRaceLength('long')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    raceLength === 'long' ? 'bg-white text-slate-900' : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  길게
-                </button>
+                {TRACK_LENGTH_PRESETS.map(preset => (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => setTrackLength(preset.value)}
+                    className={`px-2.5 py-1 rounded-lg transition-all ${
+                      trackLength === preset.value ? 'bg-white text-slate-900' : 'text-white/80 hover:text-white'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
               </div>
             </>
           )}
@@ -913,20 +911,54 @@ export default function RunningRace({
       {/* Main Track Canvas */}
       <div
         ref={containerRef}
-        className="relative w-full h-[430px] sm:h-[490px] bg-[#cbe9f8] overflow-hidden"
+        className="relative w-full min-h-[600px] h-[72vh] bg-[#cbe9f8] overflow-hidden"
       >
         <canvas ref={canvasRef} className="w-full h-full block" />
 
         {/* Ready Start Overlay */}
         {phase === 'ready' && (
           <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px] flex flex-col items-center justify-center gap-4 p-4">
-            <div className="bg-white/95 text-slate-900 px-6 py-4 rounded-3xl shadow-2xl border-4 border-amber-400 text-center max-w-sm">
+            <div className="bg-white/95 text-slate-900 px-6 py-5 rounded-3xl shadow-2xl border-4 border-amber-400 text-center w-full max-w-md">
               <p className="text-xs font-black text-amber-600 uppercase tracking-wider mb-1">
-                운동회 달리기 추첨 ({students.length}명 참가 · {numWinners}명 선발)
+                운동회 달리기 추첨 ({students.length}명 전원 한눈에 · {numWinners}명 선발)
               </p>
               <h3 className="text-xl font-black text-slate-900 mb-3">
                 {raceMode === 'first' ? '가장 먼저 결승선을 통과하라!' : '끝까지 느긋하게! 꼴등이 주인공!'}
               </h3>
+
+              {/* Track Length Slider & Presets */}
+              <div className="bg-slate-100 rounded-2xl p-3 mb-4 text-left border border-slate-200">
+                <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-2">
+                  <span>트랙 길이 조절</span>
+                  <span className="text-indigo-600">{Math.round(trackLength / 26)}m ({trackLength}px)</span>
+                </div>
+                <input
+                  type="range"
+                  min={1200}
+                  max={6500}
+                  step={100}
+                  value={trackLength}
+                  onChange={(e) => setTrackLength(parseInt(e.target.value, 10))}
+                  className="w-full accent-[#d8432b] mb-2"
+                />
+                <div className="grid grid-cols-4 gap-1.5">
+                  {TRACK_LENGTH_PRESETS.map(preset => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => setTrackLength(preset.value)}
+                      className={`py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                        trackLength === preset.value
+                          ? 'bg-amber-400 text-slate-950 border-amber-500'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 type="button"
                 onClick={startCountdown}

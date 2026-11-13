@@ -3200,7 +3200,10 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
           </button>
         )}
 
-        <div className="max-w-4xl mx-auto w-full flex flex-col items-center">
+        <div className={cn(
+          "mx-auto w-full flex flex-col items-center",
+          effect === 'running' ? "max-w-[1440px]" : "max-w-4xl"
+        )}>
           <motion.h2 
             animate={isAnimating ? { scale: [1, 1.05, 1] } : {}}
             transition={{ duration: 0.5, repeat: Infinity }}
