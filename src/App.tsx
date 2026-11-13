@@ -1157,6 +1157,25 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     );
   };
 
+  const saveQuickDrawConfig = async (overrides: Partial<{
+    numWinners: number;
+    drawEffect: GameState['drawEffect'];
+    marbleMapTheme: MapTheme;
+    marbleMapLength: MapLength;
+    drawSpeed: number;
+  }>) => {
+    if (!user?.email) return;
+    await setDoc(doc(db, 'gameState', user.email), {
+      ...gameState,
+      numWinners,
+      drawEffect,
+      marbleMapTheme,
+      marbleMapLength,
+      drawSpeed,
+      ...overrides
+    }, { merge: true });
+  };
+
   const startDrawing = async () => {
     if (filteredStudents.length < 5) {
       setModalConfig({ 
@@ -1170,10 +1189,255 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     if (!user?.email) return;
     await setDoc(doc(db, 'gameState', user.email), {
       ...gameState,
+      numWinners,
+      drawEffect,
+      marbleMapTheme,
+      marbleMapLength,
+      drawSpeed,
       status: 'drawing',
       winningNumbers: []
-    });
+    }, { merge: true });
   };
+
+  const renderDrawConfigPanel = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3">추첨 인원 ({numWinners}명)</label>
+          <div className="flex items-center gap-4 h-12">
+            <input 
+              type="range" 
+              min="1" 
+              max="20" 
+              value={numWinners} 
+              onChange={(e) => setNumWinners(parseInt(e.target.value))}
+              onMouseUp={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
+              onTouchEnd={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
+              onKeyUp={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
+              className="flex-1 accent-indigo-600"
+            />
+          </div>
+        </div>
+
+        <div className="md:col-span-2">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase">룰렛 / 추첨 배속 ({drawSpeed}x)</label>
+            <span className="text-[10px] text-amber-500 font-bold flex items-center gap-0.5">
+              <Zap className="w-3 h-3" /> 속도 조절
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 h-12">
+            {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
+              <button
+                key={spd}
+                type="button"
+                onClick={() => {
+                  setDrawSpeed(spd);
+                  saveQuickDrawConfig({ drawSpeed: spd });
+                }}
+                className={cn(
+                  "flex-1 h-9 rounded-xl text-xs font-black transition-all border",
+                  drawSpeed === spd
+                    ? "bg-amber-400 text-slate-950 border-amber-500 shadow-sm font-black"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                )}
+              >
+                {spd}x
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="md:col-span-3">
+          <div className="flex items-center justify-between mb-3">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase">추첨 효과 애니메이션 (클릭 시 효과음 미리듣기)</label>
+            <span className="text-[10px] text-indigo-500 font-bold flex items-center gap-1">
+              <Volume2 className="w-3 h-3" /> 모드별 전용 효과음 지원
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
+            {[
+              { id: 'standard', name: '네온 코어', icon: <Atom className="w-5 h-5 text-indigo-400" /> },
+              { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-5 h-5 text-amber-400" /> },
+              { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-5 h-5 text-yellow-400" /> },
+              { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-5 h-5 text-rose-500" /> },
+              { id: 'card', name: '타로 카드', icon: <Crown className="w-5 h-5 text-purple-400" /> },
+              { id: 'box', name: '황금 보물상자', icon: <Trophy className="w-5 h-5 text-amber-500" /> },
+              { id: 'machine', name: '에어로 볼', icon: <Wind className="w-5 h-5 text-cyan-400" /> },
+              { id: 'board', name: '사이버 전광판', icon: <LayoutDashboard className="w-5 h-5 text-emerald-400" /> }
+            ].map((eff) => (
+              <button
+                key={eff.id}
+                type="button"
+                onClick={() => {
+                  const nextEffect = eff.id as GameState['drawEffect'];
+                  setDrawEffect(nextEffect);
+                  saveQuickDrawConfig({ drawEffect: nextEffect });
+                  soundEngine.unlockAudio().then(() => {
+                    soundEngine.playWin(eff.id);
+                  });
+                }}
+                title={`${eff.name} 선택 및 효과음 미리듣기`}
+                className={cn(
+                  "relative group p-2.5 rounded-2xl border-2 transition-all text-center flex flex-col items-center gap-2",
+                  drawEffect === eff.id 
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
+                    : "bg-white border-slate-100 text-slate-600 hover:border-indigo-200"
+                )}
+              >
+                <div className={cn(
+                  "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
+                  drawEffect === eff.id ? "bg-white/20" : "bg-slate-50 group-hover:bg-indigo-50"
+                )}>
+                  {eff.icon}
+                </div>
+                <span className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{eff.name}</span>
+                {drawEffect === eff.id && (
+                  <motion.div layoutId="active-effect" className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
+                    <CheckCircle2 className="w-2 h-2 text-white" />
+                  </motion.div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Marble Race Map Theme Selector (Active when marble effect selected) */}
+      {drawEffect === 'marble' && (
+        <motion.div 
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-5 sm:p-6 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 rounded-3xl border-2 border-indigo-500/40 shadow-xl"
+        >
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0">
+                <Sparkles className="w-5 h-5 fill-current" />
+              </div>
+              <div>
+                <h4 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                  구슬 레이스 테마 맵 선택
+                  <span className="text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
+                    4가지 전용 기믹
+                  </span>
+                </h4>
+                <p className="text-xs text-slate-400">
+                  추첨 시 바로 적용될 레이스 트랙과 특수 방해 기믹을 선택합니다.
+                </p>
+              </div>
+            </div>
+            <span className="text-xs font-black text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full border border-amber-400/30">
+              선택됨: {MAP_THEMES.find(t => t.id === marbleMapTheme)?.name}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {MAP_THEMES.map((theme) => {
+              const isSelected = marbleMapTheme === theme.id;
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => {
+                    setMarbleMapTheme(theme.id);
+                    saveQuickDrawConfig({ marbleMapTheme: theme.id });
+                    soundEngine.unlockAudio().then(() => {
+                      soundEngine.playMarbleBounce(0.5);
+                    });
+                  }}
+                  className={cn(
+                    "relative p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between gap-3 group",
+                    isSelected
+                      ? "bg-white/10 border-amber-400 shadow-lg shadow-amber-400/20 scale-[1.02]"
+                      : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-2xl sm:text-3xl p-1 bg-white/5 rounded-xl border border-white/10">{theme.icon}</span>
+                    {isSelected ? (
+                      <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shadow-xs">
+                        기본 맵 적용
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300">
+                        클릭하여 선택
+                      </span>
+                    )}
+                  </div>
+                  <div>
+                    <h5 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
+                      {theme.name}
+                    </h5>
+                    <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 leading-relaxed">
+                      {theme.desc}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Marble Race Map Length Selection */}
+          <div className="mt-5 pt-5 border-t border-slate-800/80">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+              <div>
+                <h5 className="text-xs font-black text-white flex items-center gap-1.5">
+                  <span>📏</span>
+                  <span>구슬 레이스 맵 길이</span>
+                </h5>
+                <p className="text-[11px] text-slate-400">
+                  길이에 따라 트랙 높이 및 장애물/오브젝트 수가 자동으로 조정됩니다.
+                </p>
+              </div>
+              <span className="text-[11px] font-black text-emerald-400 bg-emerald-400/15 px-2.5 py-0.5 rounded-full border border-emerald-400/30 w-fit">
+                선택됨: {MAP_LENGTHS.find(l => l.id === marbleMapLength)?.name}
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-2.5">
+              {MAP_LENGTHS.map(len => {
+                const isSelected = marbleMapLength === len.id;
+                return (
+                  <button
+                    key={len.id}
+                    type="button"
+                    onClick={() => {
+                      setMarbleMapLength(len.id);
+                      saveQuickDrawConfig({ marbleMapLength: len.id });
+                      soundEngine.unlockAudio().then(() => {
+                        soundEngine.playMarbleBounce(0.4);
+                      });
+                    }}
+                    className={cn(
+                      "p-3 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 cursor-pointer",
+                      isSelected
+                        ? "bg-emerald-500/15 border-emerald-400 shadow-lg shadow-emerald-500/10"
+                        : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
+                    )}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-black text-white flex items-center gap-1.5">
+                        <span>{len.icon}</span>
+                        <span>{len.name}</span>
+                      </span>
+                      {isSelected && (
+                        <span className="text-[10px] font-black bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full">
+                          선택
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-300 leading-snug">
+                      {len.desc}
+                    </p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </div>
+  );
 
   const resetGame = async () => {
     showConfirm(
@@ -1533,6 +1797,16 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               </div>
             </div>
 
+            <div className="mt-6 pt-6 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-3">
+                <label className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+                  빠른 추첨 설정 (선택 즉시 자동 저장 · 바로 시작 가능)
+                </label>
+              </div>
+              {renderDrawConfigPanel()}
+            </div>
+
             {gameState?.status === 'finished' && (
               <button 
                 onClick={exportResults}
@@ -1806,230 +2080,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               <div className="space-y-8">
                 <div>
                   <label className="block text-sm font-bold text-slate-600 uppercase tracking-wider mb-3">추첨 시스템 기본 설정</label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
-                    <div>
-                      <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3">추첨 인원 ({numWinners}명)</label>
-                      <div className="flex items-center gap-4 h-12">
-                        <input 
-                          type="range" 
-                          min="1" 
-                          max="20" 
-                          value={numWinners} 
-                          onChange={(e) => setNumWinners(parseInt(e.target.value))}
-                          className="flex-1 accent-indigo-600"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase">룰렛 / 추첨 배속 ({drawSpeed}x)</label>
-                        <span className="text-[10px] text-amber-500 font-bold flex items-center gap-0.5">
-                          <Zap className="w-3 h-3" /> 속도 조절
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1.5 h-12">
-                        {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
-                          <button
-                            key={spd}
-                            type="button"
-                            onClick={() => setDrawSpeed(spd)}
-                            className={cn(
-                              "flex-1 h-9 rounded-xl text-xs font-black transition-all border",
-                              drawSpeed === spd
-                                ? "bg-amber-400 text-slate-950 border-amber-500 shadow-sm font-black"
-                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                            )}
-                          >
-                            {spd}x
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="md:col-span-3">
-                      <div className="flex items-center justify-between mb-3">
-                        <label className="block text-[10px] font-bold text-slate-400 uppercase">추첨 효과 애니메이션 (클릭 시 효과음 미리듣기)</label>
-                        <span className="text-[10px] text-indigo-500 font-bold flex items-center gap-1">
-                          <Volume2 className="w-3 h-3" /> 모드별 전용 효과음 지원
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 xl:grid-cols-8 gap-2">
-                        {[
-                          { id: 'standard', name: '네온 코어', icon: <Atom className="w-5 h-5 text-indigo-400" /> },
-                          { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-5 h-5 text-amber-400" /> },
-                          { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-5 h-5 text-yellow-400" /> },
-                          { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-5 h-5 text-rose-500" /> },
-                          { id: 'card', name: '타로 카드', icon: <Crown className="w-5 h-5 text-purple-400" /> },
-                          { id: 'box', name: '황금 보물상자', icon: <Trophy className="w-5 h-5 text-amber-500" /> },
-                          { id: 'machine', name: '에어로 볼', icon: <Wind className="w-5 h-5 text-cyan-400" /> },
-                          { id: 'board', name: '사이버 전광판', icon: <LayoutDashboard className="w-5 h-5 text-emerald-400" /> }
-                        ].map((eff) => (
-                          <button
-                            key={eff.id}
-                            onClick={() => {
-                              setDrawEffect(eff.id as any);
-                              soundEngine.unlockAudio().then(() => {
-                                soundEngine.playWin(eff.id);
-                              });
-                            }}
-                            title={`${eff.name} 선택 및 효과음 미리듣기`}
-                            className={cn(
-                              "relative group p-2.5 rounded-2xl border-2 transition-all text-center flex flex-col items-center gap-2",
-                              drawEffect === eff.id 
-                                ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
-                                : "bg-white border-slate-100 text-slate-600 hover:border-indigo-200"
-                            )}
-                          >
-                            <div className={cn(
-                              "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
-                              drawEffect === eff.id ? "bg-white/20" : "bg-slate-50 group-hover:bg-indigo-50"
-                            )}>
-                              {eff.icon}
-                            </div>
-                            <span className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{eff.name}</span>
-                            {drawEffect === eff.id && (
-                              <motion.div layoutId="active-effect" className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
-                                <CheckCircle2 className="w-2 h-2 text-white" />
-                              </motion.div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Marble Race Map Theme Selector (Active when marble effect selected) */}
-                  {drawEffect === 'marble' && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-5 sm:p-6 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 rounded-3xl border-2 border-indigo-500/40 shadow-xl"
-                    >
-                      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0">
-                            <Sparkles className="w-5 h-5 fill-current" />
-                          </div>
-                          <div>
-                            <h4 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
-                              구슬 레이스 테마 맵 선택
-                              <span className="text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                                4가지 전용 기믹
-                              </span>
-                            </h4>
-                            <p className="text-xs text-slate-400">
-                              추첨 시 기본 적용될 레이스 트랙과 특수 방해 기믹을 선택합니다.
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-xs font-black text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full border border-amber-400/30">
-                          선택됨: {MAP_THEMES.find(t => t.id === marbleMapTheme)?.name}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        {MAP_THEMES.map((theme) => {
-                          const isSelected = marbleMapTheme === theme.id;
-                          return (
-                            <button
-                              key={theme.id}
-                              type="button"
-                              onClick={() => {
-                                setMarbleMapTheme(theme.id);
-                                soundEngine.unlockAudio().then(() => {
-                                  soundEngine.playMarbleBounce(0.5);
-                                });
-                              }}
-                              className={cn(
-                                "relative p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between gap-3 group",
-                                isSelected
-                                  ? "bg-white/10 border-amber-400 shadow-lg shadow-amber-400/20 scale-[1.02]"
-                                  : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
-                              )}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-2xl sm:text-3xl p-1 bg-white/5 rounded-xl border border-white/10">{theme.icon}</span>
-                                {isSelected ? (
-                                  <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shadow-xs">
-                                    기본 맵 적용
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300">
-                                    클릭하여 선택
-                                  </span>
-                                )}
-                              </div>
-                              <div>
-                                <h5 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
-                                  {theme.name}
-                                </h5>
-                                <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 leading-relaxed">
-                                  {theme.desc}
-                                </p>
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Marble Race Map Length Selection */}
-                      <div className="mt-5 pt-5 border-t border-slate-800/80">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-                          <div>
-                            <h5 className="text-xs font-black text-white flex items-center gap-1.5">
-                              <span>📏</span>
-                              <span>구슬 레이스 맵 길이</span>
-                            </h5>
-                            <p className="text-[11px] text-slate-400">
-                              길이에 따라 트랙 높이 및 장애물/오브젝트 수가 자동으로 조정됩니다.
-                            </p>
-                          </div>
-                          <span className="text-[11px] font-black text-emerald-400 bg-emerald-400/15 px-2.5 py-0.5 rounded-full border border-emerald-400/30 w-fit">
-                            선택됨: {MAP_LENGTHS.find(l => l.id === marbleMapLength)?.name}
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-2.5">
-                          {MAP_LENGTHS.map(len => {
-                            const isSelected = marbleMapLength === len.id;
-                            return (
-                              <button
-                                key={len.id}
-                                type="button"
-                                onClick={() => {
-                                  setMarbleMapLength(len.id);
-                                  soundEngine.unlockAudio().then(() => {
-                                    soundEngine.playMarbleBounce(0.4);
-                                  });
-                                }}
-                                className={cn(
-                                  "p-3 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 cursor-pointer",
-                                  isSelected
-                                    ? "bg-emerald-500/15 border-emerald-400 shadow-lg shadow-emerald-500/10"
-                                    : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
-                                )}
-                              >
-                                <div className="flex items-center justify-between">
-                                  <span className="text-sm font-black text-white flex items-center gap-1.5">
-                                    <span>{len.icon}</span>
-                                    <span>{len.name}</span>
-                                  </span>
-                                  {isSelected && (
-                                    <span className="text-[10px] font-black bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full">
-                                      선택
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-[10px] text-slate-300 leading-snug">
-                                  {len.desc}
-                                </p>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </motion.div>
-                  )}
+                  {renderDrawConfigPanel()}
                 </div>
 
                 <div>
