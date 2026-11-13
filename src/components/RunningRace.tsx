@@ -27,6 +27,17 @@ const TRACK_LENGTH_PRESETS = [
   { label: '마라톤', value: 6000 },
 ];
 
+type ObstacleType = 'hurdle' | 'tire' | 'puddle' | 'cone';
+
+interface TrackObstacle {
+  id: string;
+  lane: number;
+  x: number;
+  type: ObstacleType;
+  knocked: boolean;
+  resolved: boolean;
+}
+
 interface Runner {
   id: string;
   name: string;
@@ -35,6 +46,9 @@ interface Runner {
   vx: number;
   baseSpeed: number;
   phase: number;
+  jumpY: number;
+  jumpVy: number;
+  tripTimer: number;
   color: string;
   hairColor: string;
   gimmick: 'none' | 'spurt' | 'stumble';
@@ -113,6 +127,7 @@ export default function RunningRace({
   phaseRef.current = phase;
 
   const runnersRef = useRef<Runner[]>([]);
+  const obstaclesRef = useRef<TrackObstacle[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const cameraRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const tapeBrokenRef = useRef<boolean>(false);
@@ -131,6 +146,30 @@ export default function RunningRace({
   const getFinishX = useCallback(() => trackLengthRef.current, []);
   const HEADER_HEIGHT = 98; // Sky + bleachers + bunting
 
+  const generateObstacles = useCallback((laneCount: number, finishX: number) => {
+    const types: ObstacleType[] = ['hurdle', 'tire', 'puddle', 'cone'];
+    const obs: TrackObstacle[] = [];
+    const usableSpan = Math.max(400, finishX - START_X - 460);
+    const countPerLane = Math.max(3, Math.round(usableSpan / 430));
+
+    for (let lane = 0; lane < laneCount; lane++) {
+      for (let k = 0; k < countPerLane; k++) {
+        const segment = usableSpan / countPerLane;
+        const ox = START_X + 250 + k * segment + (Math.random() * 0.6 + 0.2) * segment;
+        const type = types[Math.floor(Math.random() * types.length)];
+        obs.push({
+          id: `obs-${lane}-${k}`,
+          lane,
+          x: ox,
+          type,
+          knocked: false,
+          resolved: false,
+        });
+      }
+    }
+    obstaclesRef.current = obs;
+  }, []);
+
   const initRunners = useCallback(() => {
     const shuffled = [...students].sort(() => Math.random() - 0.5);
     runnersRef.current = shuffled.map((s, idx) => ({
@@ -141,6 +180,9 @@ export default function RunningRace({
       vx: 0,
       baseSpeed: 2.35 + Math.random() * 0.55,
       phase: Math.random() * Math.PI * 2,
+      jumpY: 0,
+      jumpVy: 0,
+      tripTimer: 0,
       color: JERSEY_COLORS[idx % JERSEY_COLORS.length],
       hairColor: HAIR_COLORS[idx % HAIR_COLORS.length],
       gimmick: 'none',
@@ -152,6 +194,7 @@ export default function RunningRace({
       winRank: 0,
       trail: [],
     }));
+    generateObstacles(shuffled.length, getFinishX());
     particlesRef.current = [];
     cameraRef.current = { x: 0, y: 0 };
     tapeBrokenRef.current = false;
@@ -173,6 +216,12 @@ export default function RunningRace({
   useEffect(() => {
     initRunners();
   }, [initRunners]);
+
+  useEffect(() => {
+    if (phaseRef.current === 'ready') {
+      generateObstacles(runnersRef.current.length, trackLength);
+    }
+  }, [trackLength, generateObstacles]);
 
   const spawnDust = (x: number, y: number, color = 'rgba(255,255,255,0.6)', count = 2) => {
     for (let i = 0; i < count; i++) {
@@ -302,11 +351,91 @@ export default function RunningRace({
       ctx.restore();
     };
 
+    const drawObstacle = (obs: TrackObstacle, screenX: number, screenY: number, laneHeight: number) => {
+      const scale = Math.max(0.62, Math.min(1, laneHeight / 38));
+      ctx.save();
+      ctx.translate(screenX, screenY);
+      ctx.scale(scale, scale);
+
+      if (obs.type === 'puddle') {
+        ctx.fillStyle = obs.knocked ? 'rgba(56, 189, 248, 0.55)' : 'rgba(14, 165, 233, 0.72)';
+        ctx.strokeStyle = 'rgba(224, 242, 254, 0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 13, 18, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (obs.type === 'tire') {
+        if (obs.knocked) ctx.rotate(0.65);
+        ctx.fillStyle = '#1e293b';
+        ctx.beginPath();
+        ctx.ellipse(0, 10, 12, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = '#c9583c';
+        ctx.beginPath();
+        ctx.ellipse(0, 10, 5, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.ellipse(0, 10, 12, 8, 0, 0, Math.PI * 2);
+        ctx.stroke();
+      } else if (obs.type === 'cone') {
+        if (obs.knocked) {
+          ctx.translate(6, 12);
+          ctx.rotate(1.3);
+          ctx.translate(-6, -12);
+        }
+        ctx.fillStyle = '#f97316';
+        ctx.beginPath();
+        ctx.moveTo(-7, 15);
+        ctx.lineTo(7, 15);
+        ctx.lineTo(2, -4);
+        ctx.lineTo(-2, -4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-4, 4, 8, 4);
+      } else {
+        // hurdle
+        if (obs.knocked) {
+          ctx.translate(6, 14);
+          ctx.rotate(1.15);
+          ctx.translate(-6, -14);
+        }
+        ctx.strokeStyle = '#e2e8f0';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.moveTo(-5, 15);
+        ctx.lineTo(-2, -4);
+        ctx.moveTo(5, 15);
+        ctx.lineTo(2, -4);
+        ctx.stroke();
+        // Top red-white striped bar
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(-7, -7, 14, 5);
+        ctx.fillStyle = '#ef4444';
+        ctx.fillRect(-3, -7, 6, 5);
+      }
+
+      ctx.restore();
+    };
+
     const drawRunner = (r: Runner, screenX: number, screenY: number, isLeader: boolean, laneHeight: number) => {
       const scale = Math.max(0.58, Math.min(1, laneHeight / 38));
       ctx.save();
       ctx.translate(screenX, screenY);
       ctx.scale(scale, scale);
+
+      // Shadow stays on ground and shrinks slightly when jumping
+      const shadowScale = Math.max(0.45, 1 + r.jumpY / 35);
+      ctx.fillStyle = 'rgba(0,0,0,0.22)';
+      ctx.beginPath();
+      ctx.ellipse(0, 16, 11 * shadowScale, 4 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Apply vertical jump offset
+      ctx.translate(0, r.jumpY);
 
       // Spurt afterimage
       if (r.gimmick === 'spurt' && !r.finished) {
@@ -327,14 +456,13 @@ export default function RunningRace({
         }
       }
 
-      // Shadow
-      ctx.fillStyle = 'rgba(0,0,0,0.22)';
-      ctx.beginPath();
-      ctx.ellipse(0, 16, 11, 4, 0, 0, Math.PI * 2);
-      ctx.fill();
-
       const swing = r.vx > 0.1 ? Math.sin(r.phase) : 0;
-      const stumbleTilt = r.gimmick === 'stumble' ? Math.sin(r.phase * 2) * 0.35 : 0;
+      const stumbleTilt =
+        r.tripTimer > 0
+          ? 0.55 + Math.sin(r.tripTimer * 0.5) * 0.25
+          : r.gimmick === 'stumble'
+            ? Math.sin(r.phase * 2) * 0.35
+            : 0;
 
       ctx.save();
       ctx.rotate(stumbleTilt);
@@ -543,6 +671,70 @@ export default function RunningRace({
           }
 
           if (r.bubbleTimer > 0) r.bubbleTimer -= step;
+          if (r.tripTimer > 0) r.tripTimer = Math.max(0, r.tripTimer - step);
+
+          // Vertical jump physics
+          if (r.jumpY < 0 || r.jumpVy < 0) {
+            r.jumpY += r.jumpVy * step;
+            r.jumpVy += 0.38 * step;
+            if (r.jumpY >= 0) {
+              r.jumpY = 0;
+              r.jumpVy = 0;
+            }
+          }
+
+          // Check Obstacles on this runner's lane
+          for (const obs of obstaclesRef.current) {
+            if (obs.lane !== r.lane || obs.resolved) continue;
+            const dist = obs.x - r.x;
+            if (dist <= 20 && dist >= -10) {
+              obs.resolved = true;
+              const jumpChance = r.gimmick === 'spurt' ? 0.85 : 0.64;
+              if (Math.random() < jumpChance) {
+                // Clean jump over obstacle!
+                r.jumpVy = -5.2;
+                r.jumpY = -1;
+                r.vx = Math.max(r.vx, r.baseSpeed * 1.18);
+                const jumpWords = ['점프!', '폴짝!', '나이스!', '가뿐해!'];
+                r.bubbleText = jumpWords[Math.floor(Math.random() * jumpWords.length)];
+                r.bubbleTimer = 42;
+                spawnDust(r.x, HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58, '#fde047', 4);
+                if (!mutedRef.current) soundEngine.playMarbleBounce(0.25);
+                if (now - lastCommentaryTimeRef.current > 1100) {
+                  lastCommentaryTimeRef.current = now;
+                  const obsName =
+                    obs.type === 'hurdle' ? '허들' : obs.type === 'tire' ? '타이어' : obs.type === 'puddle' ? '물웅덩이' : '라바콘';
+                  setCommentary(`🦘 ${r.name} 선수, ${obsName}을(를) 가볍게 뛰어넘습니다!`);
+                }
+              } else {
+                // Tripped / stumbled on obstacle!
+                obs.knocked = true;
+                r.gimmick = 'stumble';
+                r.gimmickTimer = 46;
+                r.tripTimer = 30;
+                r.jumpVy = -2.4;
+                r.jumpY = -1;
+                r.vx *= 0.4;
+                const tripWords =
+                  obs.type === 'puddle' ? ['첨벙!', '미끄덩!'] : ['아야!', '걸렸다!', '꽈당!'];
+                r.bubbleText = tripWords[Math.floor(Math.random() * tripWords.length)];
+                r.bubbleTimer = 55;
+                spawnDust(
+                  obs.x,
+                  HEADER_HEIGHT + r.lane * laneHeight + laneHeight * 0.58,
+                  obs.type === 'puddle' ? '#38bdf8' : '#f87171',
+                  6
+                );
+                if (!mutedRef.current) soundEngine.playStumble();
+                if (now - lastCommentaryTimeRef.current > 1000) {
+                  lastCommentaryTimeRef.current = now;
+                  const obsName =
+                    obs.type === 'hurdle' ? '허들' : obs.type === 'tire' ? '타이어' : obs.type === 'puddle' ? '물웅덩이' : '라바콘';
+                  setCommentary(`💥 아이고! ${r.name} 선수, ${obsName}에 걸려 넘어지며 주춤합니다!`);
+                }
+              }
+            }
+          }
 
           // Target speed calculation
           const jitter = (Math.random() - 0.48) * 0.22;
@@ -861,6 +1053,14 @@ export default function RunningRace({
         ctx.arc(p.x - camX, p.y - camY, p.size, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
+      }
+
+      // Draw Obstacles on Track
+      for (const obs of obstaclesRef.current) {
+        const ox = obs.x - camX;
+        if (ox < -30 || ox > W + 30) continue;
+        const oy = HEADER_HEIGHT + obs.lane * laneHeight + laneHeight * 0.58 - camY;
+        drawObstacle(obs, ox, oy, laneHeight);
       }
 
       // Draw Runners
