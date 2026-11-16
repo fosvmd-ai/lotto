@@ -116,7 +116,7 @@ export default function RunningRace({
   const [phase, setPhase] = useState<RacePhase>('ready');
   const [countdownText, setCountdownText] = useState<string>('');
   const [isMuted, setIsMuted] = useState(false);
-  const [slowMoReason, setSlowMoReason] = useState<'none' | 'lead' | 'finish'>('none');
+  const [slowMoReason, setSlowMoReason] = useState<'none' | 'lead' | 'finish' | 'ufo'>('none');
   const [leaderName, setLeaderName] = useState<string>(students[0]?.name || '');
   const [commentary, setCommentary] = useState<string>('출발선에서 심판의 신호를 기다리고 있습니다!');
   const [progressPct, setProgressPct] = useState<number>(0);
@@ -760,11 +760,13 @@ export default function RunningRace({
           leadChangeSlowMoRef.current = Math.max(0, leadChangeSlowMoRef.current - dt * 60);
         }
         const leadSlowMoActive = leadChangeSlowMoRef.current > 0;
-        setSlowMoReason(slowMoActive ? 'finish' : leadSlowMoActive ? 'lead' : 'none');
+        const ufoActive = ufoAbductionRef.current !== null;
+        setSlowMoReason(slowMoActive ? 'finish' : ufoActive ? 'ufo' : leadSlowMoActive ? 'lead' : 'none');
 
-        const slowFactor = slowMoActive ? 0.24 : leadSlowMoActive ? 0.3 : 1.0;
+        const slowFactor = slowMoActive ? 0.24 : ufoActive ? 0.28 : leadSlowMoActive ? 0.3 : 1.0;
         const timeScale = slowFactor * speedRef.current;
         const step = dt * 60 * timeScale;
+        const ufoStep = dt * 60 * speedRef.current;
 
         // Determine active weather
         let activeWeather: WeatherType = weatherModeRef.current;
@@ -784,7 +786,7 @@ export default function RunningRace({
           if (!victim || victim.finished) {
             ufoAbductionRef.current = null;
           } else {
-            ufo.timer += step;
+            ufo.timer += ufoStep;
             if (ufo.phase === 'beamUp') {
               ufo.liftY = -Math.min(34, (ufo.timer / 26) * 34);
               victim.x = ufo.startX;
@@ -1198,29 +1200,38 @@ export default function RunningRace({
           ? sortedRunners.find(r => !r.finished) || sortedRunners[0]
           : [...runners].filter(r => !r.finished).sort((a, b) => a.x - b.x)[0] || sortedRunners[sortedRunners.length - 1];
 
+      const ufoVictim =
+        phaseRef.current === 'racing' && ufoAbductionRef.current
+          ? runners.find(r => r.id === ufoAbductionRef.current?.runnerId) || null
+          : null;
+      const camTargetRunner = ufoVictim || focusRunner;
+
       const maxCamX = Math.max(0, FINISH_X + 180 - W);
-      const targetCamX = focusRunner ? Math.max(0, Math.min(maxCamX, focusRunner.x - W * 0.55)) : 0;
-      cameraRef.current.x += (targetCamX - cameraRef.current.x) * 0.1;
+      const targetCamX = camTargetRunner ? Math.max(0, Math.min(maxCamX, camTargetRunner.x - W * 0.55)) : 0;
+      cameraRef.current.x += (targetCamX - cameraRef.current.x) * (ufoVictim ? 0.14 : 0.1);
       cameraRef.current.y = 0;
 
       const camX = cameraRef.current.x;
       const camY = 0;
 
-      // Smooth Close-Up Zoom on Lead Change or Photo Finish (tasteful & non-chaotic)
+      // Smooth Close-Up Zoom on UFO Abduction, Lead Change, or Photo Finish (tasteful & non-chaotic)
+      const isUfoZoom = phaseRef.current === 'racing' && ufoVictim !== null;
       const isLeadZoom = phaseRef.current === 'racing' && leadChangeSlowMoRef.current > 0;
       const isFinishZoom = phaseRef.current === 'racing' && slowMoActive;
-      const targetZoom = isLeadZoom ? 1.34 : isFinishZoom ? 1.22 : 1.0;
-      cameraRef.current.zoom += (targetZoom - cameraRef.current.zoom) * 0.085;
+      const targetZoom = isUfoZoom ? 1.42 : isLeadZoom ? 1.34 : isFinishZoom ? 1.22 : 1.0;
+      cameraRef.current.zoom += (targetZoom - cameraRef.current.zoom) * 0.095;
       const zoom = cameraRef.current.zoom;
 
-      const focusScreenXNorm = focusRunner ? Math.max(0.15, Math.min(0.85, (focusRunner.x - camX) / W)) : 0.5;
-      const focusScreenYNorm = focusRunner
-        ? Math.max(0.2, Math.min(0.88, (HEADER_HEIGHT + focusRunner.lane * laneHeight + laneHeight * 0.58) / H))
+      const pivotRunner = ufoVictim || focusRunner;
+      const pivotLift = ufoVictim && ufoAbductionRef.current ? ufoAbductionRef.current.liftY * 0.5 : 0;
+      const focusScreenXNorm = pivotRunner ? Math.max(0.15, Math.min(0.85, (pivotRunner.x - camX) / W)) : 0.5;
+      const focusScreenYNorm = pivotRunner
+        ? Math.max(0.2, Math.min(0.88, (HEADER_HEIGHT + pivotRunner.lane * laneHeight + laneHeight * 0.58 + pivotLift) / H))
         : 0.5;
-      const targetPivotXNorm = isLeadZoom || isFinishZoom ? focusScreenXNorm : 0.5;
-      const targetPivotYNorm = isLeadZoom || isFinishZoom ? focusScreenYNorm : 0.5;
-      cameraRef.current.pivotX += (targetPivotXNorm - cameraRef.current.pivotX) * 0.1;
-      cameraRef.current.pivotY += (targetPivotYNorm - cameraRef.current.pivotY) * 0.1;
+      const targetPivotXNorm = isUfoZoom || isLeadZoom || isFinishZoom ? focusScreenXNorm : 0.5;
+      const targetPivotYNorm = isUfoZoom || isLeadZoom || isFinishZoom ? focusScreenYNorm : 0.5;
+      cameraRef.current.pivotX += (targetPivotXNorm - cameraRef.current.pivotX) * 0.12;
+      cameraRef.current.pivotY += (targetPivotYNorm - cameraRef.current.pivotY) * 0.12;
 
       ctx.save();
       if (zoom > 1.005) {
@@ -1585,9 +1596,17 @@ export default function RunningRace({
           </div>
 
           {slowMoReason !== 'none' && (
-            <div className="bg-rose-500 text-white font-black px-3 py-1.5 rounded-xl text-xs animate-pulse flex items-center gap-1 shadow">
+            <div className={`text-white font-black px-3 py-1.5 rounded-xl text-xs animate-pulse flex items-center gap-1 shadow ${
+              slowMoReason === 'ufo' ? 'bg-emerald-600' : 'bg-rose-500'
+            }`}>
               <Zap className="w-3.5 h-3.5" />
-              <span>{slowMoReason === 'lead' ? '선두 역전! 슬로우 모션' : '결승! 느린 화면'}</span>
+              <span>
+                {slowMoReason === 'ufo'
+                  ? 'UFO 납치! 확대 슬로우'
+                  : slowMoReason === 'lead'
+                    ? '선두 역전! 슬로우 모션'
+                    : '결승! 느린 화면'}
+              </span>
             </div>
           )}
 
@@ -1768,12 +1787,14 @@ export default function RunningRace({
           </div>
         )}
 
-        {/* Clean Lead-Change Close-Up Pill */}
-        {phase === 'racing' && slowMoReason === 'lead' && (
+        {/* Clean Lead-Change / UFO Close-Up Pill */}
+        {phase === 'racing' && (slowMoReason === 'lead' || slowMoReason === 'ufo') && (
           <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none">
-            <div className="bg-slate-950/80 backdrop-blur-sm text-amber-300 border border-amber-400/60 font-black text-sm sm:text-base px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2">
-              <span>🔥</span>
-              <span>선두 역전! {leaderName}</span>
+            <div className={`bg-slate-950/85 backdrop-blur-sm border font-black text-sm sm:text-base px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2 ${
+              slowMoReason === 'ufo' ? 'text-emerald-300 border-emerald-400/70' : 'text-amber-300 border-amber-400/60'
+            }`}>
+              <span>{slowMoReason === 'ufo' ? '🛸' : '🔥'}</span>
+              <span>{slowMoReason === 'ufo' ? 'UFO 출현! 외계인 납치 중!' : `선두 역전! ${leaderName}`}</span>
             </div>
           </div>
         )}
