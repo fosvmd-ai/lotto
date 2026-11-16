@@ -410,7 +410,7 @@ export default function App() {
   // 로그인 화면 (이름 입력)
   if (!studentName && !user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 text-white">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-4 text-slate-900">
         <Modal 
           isOpen={isLoginModalOpen} 
           onClose={() => setIsLoginModalOpen(false)} 
@@ -418,29 +418,34 @@ export default function App() {
           footer={
             <button 
               onClick={() => setIsLoginModalOpen(false)} 
-              className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold"
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm"
             >
               확인
             </button>
           }
         >
-          <p className="text-slate-600">{loginModalContent}</p>
+          <p className="text-slate-600 text-sm">{loginModalContent}</p>
         </Modal>
-        <div className="bg-slate-900 p-8 rounded-3xl shadow-2xl border border-slate-800 max-w-md w-full text-center">
-          <div className="flex justify-end mb-6">
+        <div className="bg-white p-7 sm:p-8 rounded-2xl shadow-sm border border-slate-200/90 max-w-md w-full">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <Trophy className="w-5 h-5 text-indigo-600" />
+              </div>
+              <span className="font-black text-base text-slate-900">우리반 로또</span>
+            </div>
             <button 
               onClick={handleAdminSignIn}
               disabled={isLoggingIn}
-              className="text-xs bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white px-3.5 py-2 rounded-xl transition-all border border-slate-700 flex items-center gap-1.5 shadow-sm"
+              className="text-xs bg-slate-100 hover:bg-slate-200/80 text-slate-700 px-3 py-1.5 rounded-lg transition-colors border border-slate-200 flex items-center gap-1.5 font-semibold"
             >
-              {isLoggingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" /> : <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />}
-              <span>{isLoggingIn ? "구글 로그인 중..." : "선생님/관리자 로그인"}</span>
+              {isLoggingIn ? <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-600" /> : <ShieldCheck className="w-3.5 h-3.5 text-indigo-600" />}
+              <span>{isLoggingIn ? "로그인 중..." : "선생님 로그인"}</span>
             </button>
           </div>
-          <Trophy className="w-16 h-16 text-yellow-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-black mb-2">우리반 로또</h1>
-          <p className="text-slate-400 mb-8">이름을 입력하고 입장하세요!</p>
-          <div className="relative mb-4" onClick={(e) => e.stopPropagation()}>
+          <h1 className="text-2xl font-black text-slate-900 mb-1">환영합니다</h1>
+          <p className="text-sm text-slate-500 mb-6">학생 이름을 입력해 학급 로또에 입장하세요.</p>
+          <div className="relative mb-3" onClick={(e) => e.stopPropagation()}>
             <input 
               type="text"
               value={loginInput}
@@ -450,16 +455,16 @@ export default function App() {
               }}
               onFocus={() => setShowLoginSuggestions(true)}
               placeholder="이름을 입력하세요"
-              className="w-full bg-slate-800 border-slate-700 text-white p-4 rounded-xl"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-900 px-4 py-3 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
               onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
             />
             <AnimatePresence>
               {showLoginSuggestions && loginSuggestions.length > 0 && (
                 <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
+                  initial={{ opacity: 0, y: -6 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  className="absolute left-0 right-0 top-full mt-2 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden z-50 shadow-2xl"
+                  exit={{ opacity: 0, y: -6 }}
+                  className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl overflow-hidden z-50 shadow-lg"
                 >
                   {loginSuggestions.map(s => (
                     <button
@@ -468,7 +473,7 @@ export default function App() {
                         setLoginInput(s.name);
                         setShowLoginSuggestions(false);
                       }}
-                      className="w-full p-3 text-left hover:bg-slate-700 transition-colors border-b border-slate-700 last:border-0"
+                      className="w-full px-4 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-indigo-50 hover:text-indigo-700 transition-colors border-b border-slate-100 last:border-0"
                     >
                       {s.name}
                     </button>
@@ -479,7 +484,7 @@ export default function App() {
           </div>
           <button 
             onClick={handleLogin}
-            className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900 font-bold p-4 rounded-xl transition-all"
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl text-sm transition-colors shadow-xs"
           >
             입장하기
           </button>
@@ -489,59 +494,62 @@ export default function App() {
   }
 
   return (
-    <div 
-      className="min-h-screen text-slate-100 pb-20 font-sans transition-colors duration-500"
-      style={{ backgroundColor: gameState?.theme?.backgroundColor || '#020617' }}
-    >
-      <header className="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-30">
-        <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-16 font-sans">
+      <header className="border-b border-slate-200/80 bg-white/85 backdrop-blur-md sticky top-0 z-30">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
             {gameState?.theme?.schoolLogoUrl ? (
-              <img src={gameState.theme.schoolLogoUrl} alt="Logo" className="w-8 h-8 object-contain" referrerPolicy="no-referrer" />
+              <img src={gameState.theme.schoolLogoUrl} alt="Logo" className="w-7 h-7 object-contain rounded-md" referrerPolicy="no-referrer" />
             ) : (
-              <Trophy className="w-6 h-6 text-yellow-500" />
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center">
+                <Trophy className="w-4 h-4 text-indigo-600" />
+              </div>
             )}
-            <span className="font-bold text-lg">우리반 로또</span>
+            <span className="font-black text-base text-slate-900 tracking-tight">우리반 로또</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-slate-400">
+          <div className="flex items-center gap-3">
+            <span className="text-xs font-semibold text-slate-500 hidden sm:inline">
               {viewMode === 'superadmin' ? "최고 관리자" : (viewMode === 'teacher' ? "선생님" : studentName)}님
             </span>
             {isTeacher && (
-              <div className="flex bg-slate-800 rounded-full p-1">
+              <div className="flex bg-slate-100 rounded-lg p-0.5 border border-slate-200/70">
                 <button 
                   onClick={() => setViewMode('student')}
-                  className={cn("text-[10px] px-3 py-1 rounded-full font-bold transition-all", viewMode === 'student' ? "bg-yellow-500 text-slate-900" : "text-slate-400")}
+                  className={cn("text-xs px-2.5 py-1 rounded-md font-bold transition-all", viewMode === 'student' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-500 hover:text-slate-700")}
                 >
                   학생
                 </button>
                 <button 
                   onClick={() => setViewMode('teacher')}
-                  className={cn("text-[10px] px-3 py-1 rounded-full font-bold transition-all", viewMode === 'teacher' ? "bg-blue-500 text-white" : "text-slate-400")}
+                  className={cn("text-xs px-2.5 py-1 rounded-md font-bold transition-all", viewMode === 'teacher' ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-500 hover:text-slate-700")}
                 >
                   교사
                 </button>
                 {isSuperAdmin && (
                   <button 
                     onClick={() => setViewMode('superadmin')}
-                    className={cn("text-[10px] px-3 py-1 rounded-full font-bold transition-all", viewMode === 'superadmin' ? "bg-purple-500 text-white" : "text-slate-400")}
+                    className={cn("text-xs px-2.5 py-1 rounded-md font-bold transition-all", viewMode === 'superadmin' ? "bg-white text-purple-600 shadow-2xs" : "text-slate-500 hover:text-slate-700")}
                   >
                     관리자
                   </button>
                 )}
               </div>
             )}
-            <button onClick={() => { 
-              if (user) logOut();
-              else setStudentName(null); 
-            }} className="text-slate-500 hover:text-white">
-              <LogOut className="w-5 h-5" />
+            <button
+              onClick={() => { 
+                if (user) logOut();
+                else setStudentName(null); 
+              }}
+              title="로그아웃"
+              className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
             </button>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 py-8">
+      <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6">
         {viewMode === 'superadmin' && isSuperAdmin ? (
           <SuperAdminView students={students} entries={entries} admins={admins} />
         ) : viewMode === 'teacher' && isTeacher ? (
@@ -566,23 +574,23 @@ export default function App() {
 function Modal({ isOpen, onClose, title, children, footer }: { isOpen: boolean, onClose: () => void, title: string, children: React.ReactNode, footer?: React.ReactNode }) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
       <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }}
+        initial={{ scale: 0.96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden"
+        className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full overflow-hidden"
       >
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-xl font-bold text-slate-900">{title}</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-full transition-colors">
-            <Trash2 className="w-5 h-5 text-slate-400" />
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-400 hover:text-slate-600">
+            <X className="w-4 h-4" />
           </button>
         </div>
         <div className="p-6">
           {children}
         </div>
         {footer && (
-          <div className="p-6 bg-slate-50 flex justify-end gap-3">
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
             {footer}
           </div>
         )}
@@ -1075,41 +1083,34 @@ function TeacherView({ students, entries, gameState, admins, user }: {
     if (pendingTicketRequests.length === 0) return null;
 
     return (
-      <section className="bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 border-2 border-amber-300 rounded-3xl p-6 shadow-md shadow-amber-500/5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-4 border-b border-amber-200">
+      <section className="bg-amber-50/80 border border-amber-200 rounded-2xl p-4 sm:p-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-amber-200/80">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-200 shrink-0">
-              <Ticket className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
+              <Ticket className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="text-lg font-black text-slate-900">
-                  응모권 추가구매 요청
-                </h3>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-xs font-black shadow-xs animate-pulse">
-                  {pendingTicketRequests.length}건 대기 중
-                </span>
-                <span className="text-xs font-black text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md">
-                  총 {totalPendingTickets}장
+                <h3 className="text-sm sm:text-base font-bold text-slate-900">응모권 추가구매 요청</h3>
+                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-xs font-bold">
+                  {pendingTicketRequests.length}건 · {totalPendingTickets}장
                 </span>
               </div>
-              <p className="text-xs text-slate-600 font-medium mt-0.5">
-                학생이 응모권을 추가 요청했습니다. 승인 시 해당 학생의 응모권이 즉시 지급됩니다.
-              </p>
+              <p className="text-xs text-slate-600 mt-0.5">승인 시 해당 학생에게 응모권이 즉시 지급됩니다.</p>
             </div>
           </div>
 
           <button
             type="button"
             onClick={approveAllTicketRequests}
-            className="px-5 py-3 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white rounded-2xl font-black text-sm shadow-md shadow-amber-500/25 active:scale-95 transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs sm:text-sm transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
           >
-            <Sparkles className="w-4 h-4 fill-white" />
+            <CheckCheck className="w-4 h-4" />
             전체 일괄 승인 ({totalPendingTickets}장)
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
           {pendingTicketRequests.map((req) => {
             const student = students.find(s => s.id === req.studentId || s.name === req.studentName);
             const currentTickets = student?.tickets || 1;
@@ -1118,26 +1119,25 @@ function TeacherView({ students, entries, gameState, admins, user }: {
             return (
               <div 
                 key={req.id}
-                className="p-3.5 bg-white rounded-2xl border border-amber-200/90 shadow-2xs flex items-center justify-between gap-3 hover:border-amber-400 hover:shadow-xs transition-all"
+                className="p-3 bg-white rounded-xl border border-amber-200/80 flex items-center justify-between gap-2.5"
               >
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-black text-slate-900 text-sm truncate">{req.studentName}</span>
-                    <span className="px-2 py-0.5 rounded-lg bg-amber-100 text-amber-900 text-xs font-black shrink-0">
-                      +{req.amount}장 요청
+                    <span className="font-bold text-slate-900 text-sm truncate">{req.studentName}</span>
+                    <span className="px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 text-xs font-bold shrink-0">
+                      +{req.amount}장
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 mt-1">
-                    현재 {currentTickets}장 보유 · {timeStr}
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    보유 {currentTickets}장 · {timeStr}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => approveTicketRequest(req)}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black rounded-xl transition-all shadow-xs active:scale-95 flex items-center gap-1 cursor-pointer"
-                    title="승인하여 응모권 지급"
+                    className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
                   >
                     <Check className="w-3.5 h-3.5" />
                     승인
@@ -1145,7 +1145,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                   <button
                     type="button"
                     onClick={() => rejectTicketRequest(req)}
-                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all cursor-pointer"
+                    className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                     title="반려"
                   >
                     <X className="w-4 h-4" />
@@ -1203,257 +1203,184 @@ function TeacherView({ students, entries, gameState, admins, user }: {
 
   const renderDrawConfigPanel = () => (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-3xl border border-slate-100">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50/90 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
+        {/* Draw Count */}
         <div>
-          <label className="block text-[10px] font-bold text-slate-400 uppercase mb-3">추첨 인원 ({numWinners}명)</label>
-          <div className="flex items-center gap-4 h-12">
-            <input 
-              type="range" 
-              min="1" 
-              max="20" 
-              value={numWinners} 
-              onChange={(e) => setNumWinners(parseInt(e.target.value))}
-              onMouseUp={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
-              onTouchEnd={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
-              onKeyUp={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
-              className="flex-1 accent-indigo-600"
-            />
-          </div>
-        </div>
-
-        <div className="md:col-span-2">
           <div className="flex items-center justify-between mb-2">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase">룰렛 / 추첨 배속 ({drawSpeed}x)</label>
-            <span className="text-[10px] text-amber-500 font-bold flex items-center gap-0.5">
-              <Zap className="w-3 h-3" /> 버튼 또는 슬라이더로 세밀 조절
+            <label className="text-xs font-bold text-slate-600">추첨 인원</label>
+            <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
+              {numWinners}명
             </span>
           </div>
-          <div className="flex items-center gap-1.5 mb-2">
-            {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
-              <button
-                key={spd}
-                type="button"
-                onClick={() => {
-                  setDrawSpeed(spd);
-                  saveQuickDrawConfig({ drawSpeed: spd });
-                }}
-                className={cn(
-                  "flex-1 h-8 rounded-xl text-xs font-black transition-all border",
-                  drawSpeed === spd
-                    ? "bg-amber-400 text-slate-950 border-amber-500 shadow-sm font-black"
-                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
-                )}
-              >
-                {spd}x
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-2.5 px-1">
-            <span className="text-[10px] font-bold text-slate-400 shrink-0">0.2x</span>
-            <input
-              type="range"
-              min="0.2"
-              max="5"
-              step="0.1"
-              value={drawSpeed}
-              onChange={(e) => setDrawSpeed(parseFloat(e.target.value))}
-              onMouseUp={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
-              onTouchEnd={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
-              onKeyUp={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
-              className="flex-1 accent-amber-500 cursor-pointer"
-            />
-            <span className="text-[10px] font-bold text-slate-400 shrink-0">5.0x</span>
-          </div>
+          <input 
+            type="range" 
+            min="1" 
+            max="20" 
+            value={numWinners} 
+            onChange={(e) => setNumWinners(parseInt(e.target.value))}
+            onMouseUp={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
+            onTouchEnd={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
+            onKeyUp={(e) => saveQuickDrawConfig({ numWinners: parseInt((e.target as HTMLInputElement).value) })}
+            className="w-full accent-indigo-600 cursor-pointer"
+          />
         </div>
 
-        <div className="md:col-span-3">
-          <div className="flex items-center justify-between mb-3">
-            <label className="block text-[10px] font-bold text-slate-400 uppercase">추첨 효과 애니메이션 (클릭 시 효과음 미리듣기)</label>
-            <span className="text-[10px] text-indigo-500 font-bold flex items-center gap-1">
-              <Volume2 className="w-3 h-3" /> 모드별 전용 효과음 지원
-            </span>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-9 gap-2">
-            {[
-              { id: 'standard', name: '네온 코어', icon: <Atom className="w-5 h-5 text-indigo-400" /> },
-              { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-5 h-5 text-amber-400" /> },
-              { id: 'running', name: '달리기 레이스', icon: <Flag className="w-5 h-5 text-orange-500" /> },
-              { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-5 h-5 text-yellow-400" /> },
-              { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-5 h-5 text-rose-500" /> },
-              { id: 'card', name: '타로 카드', icon: <Crown className="w-5 h-5 text-purple-400" /> },
-              { id: 'box', name: '황금 보물상자', icon: <Trophy className="w-5 h-5 text-amber-500" /> },
-              { id: 'machine', name: '에어로 볼', icon: <Wind className="w-5 h-5 text-cyan-400" /> },
-              { id: 'board', name: '사이버 전광판', icon: <LayoutDashboard className="w-5 h-5 text-emerald-400" /> }
-            ].map((eff) => (
-              <button
-                key={eff.id}
-                type="button"
-                onClick={() => {
-                  const nextEffect = eff.id as GameState['drawEffect'];
-                  setDrawEffect(nextEffect);
-                  saveQuickDrawConfig({ drawEffect: nextEffect });
-                  soundEngine.unlockAudio().then(() => {
-                    soundEngine.playWin(eff.id);
-                  });
-                }}
-                title={`${eff.name} 선택 및 효과음 미리듣기`}
-                className={cn(
-                  "relative group p-2.5 rounded-2xl border-2 transition-all text-center flex flex-col items-center gap-2",
-                  drawEffect === eff.id 
-                    ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" 
-                    : "bg-white border-slate-100 text-slate-600 hover:border-indigo-200"
-                )}
-              >
-                <div className={cn(
-                  "w-10 h-10 rounded-xl flex items-center justify-center transition-colors",
-                  drawEffect === eff.id ? "bg-white/20" : "bg-slate-50 group-hover:bg-indigo-50"
-                )}>
-                  {eff.icon}
-                </div>
-                <span className="text-[10px] font-black uppercase tracking-wider whitespace-nowrap">{eff.name}</span>
-                {drawEffect === eff.id && (
-                  <motion.div layoutId="active-effect" className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-white flex items-center justify-center">
-                    <CheckCircle2 className="w-2 h-2 text-white" />
-                  </motion.div>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Marble Race Map Theme Selector (Active when marble effect selected) */}
-      {drawEffect === 'marble' && (
-        <motion.div 
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="p-5 sm:p-6 bg-gradient-to-br from-indigo-950 via-slate-900 to-purple-950 rounded-3xl border-2 border-indigo-500/40 shadow-xl"
-        >
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-xl bg-amber-400/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shrink-0">
-                <Sparkles className="w-5 h-5 fill-current" />
-              </div>
-              <div>
-                <h4 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
-                  구슬 레이스 테마 맵 선택
-                  <span className="text-[11px] font-bold text-amber-300 bg-amber-400/10 px-2 py-0.5 rounded-full border border-amber-400/20">
-                    4가지 전용 기믹
-                  </span>
-                </h4>
-                <p className="text-xs text-slate-400">
-                  추첨 시 바로 적용될 레이스 트랙과 특수 방해 기믹을 선택합니다.
-                </p>
-              </div>
-            </div>
-            <span className="text-xs font-black text-amber-400 bg-amber-400/15 px-3 py-1 rounded-full border border-amber-400/30">
-              선택됨: {MAP_THEMES.find(t => t.id === marbleMapTheme)?.name}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {MAP_THEMES.map((theme) => {
-              const isSelected = marbleMapTheme === theme.id;
-              return (
+        {/* Speed Multiplier (Unified slider + key presets) */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-bold text-slate-600 flex items-center gap-1">
+              <Zap className="w-3.5 h-3.5 text-amber-500" />
+              추첨 배속
+            </label>
+            <div className="flex items-center gap-1">
+              {[1, 2, 4].map(spd => (
                 <button
-                  key={theme.id}
+                  key={spd}
                   type="button"
                   onClick={() => {
-                    setMarbleMapTheme(theme.id);
-                    saveQuickDrawConfig({ marbleMapTheme: theme.id });
+                    setDrawSpeed(spd);
+                    saveQuickDrawConfig({ drawSpeed: spd });
+                  }}
+                  className={cn(
+                    "px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors border",
+                    drawSpeed === spd
+                      ? "bg-amber-400 text-slate-950 border-amber-500"
+                      : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                  )}
+                >
+                  {spd}x
+                </button>
+              ))}
+              <span className="text-xs font-black text-amber-600 ml-1 min-w-[34px] text-right">
+                {drawSpeed.toFixed(1)}x
+              </span>
+            </div>
+          </div>
+          <input
+            type="range"
+            min="0.2"
+            max="5"
+            step="0.1"
+            value={drawSpeed}
+            onChange={(e) => setDrawSpeed(parseFloat(e.target.value))}
+            onMouseUp={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
+            onTouchEnd={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
+            onKeyUp={(e) => saveQuickDrawConfig({ drawSpeed: parseFloat((e.target as HTMLInputElement).value) })}
+            className="w-full accent-amber-500 cursor-pointer"
+          />
+        </div>
+
+        {/* Draw Effect Selection */}
+        <div className="md:col-span-2 pt-3 border-t border-slate-200/70">
+          <div className="flex items-center justify-between mb-2.5">
+            <label className="text-xs font-bold text-slate-600">추첨 방식</label>
+            <span className="text-[11px] text-slate-400 flex items-center gap-1">
+              <Volume2 className="w-3 h-3" /> 선택 시 효과음 미리듣기
+            </span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-1.5">
+            {[
+              { id: 'standard', name: '네온 코어', icon: <Atom className="w-4 h-4 text-indigo-500" /> },
+              { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-4 h-4 text-amber-500" /> },
+              { id: 'running', name: '달리기 레이스', icon: <Flag className="w-4 h-4 text-orange-500" /> },
+              { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-4 h-4 text-yellow-500" /> },
+              { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-4 h-4 text-rose-500" /> },
+              { id: 'card', name: '타로 카드', icon: <Crown className="w-4 h-4 text-purple-500" /> },
+              { id: 'box', name: '보물상자', icon: <Trophy className="w-4 h-4 text-amber-600" /> },
+              { id: 'machine', name: '에어로 볼', icon: <Wind className="w-4 h-4 text-cyan-500" /> },
+              { id: 'board', name: '전광판', icon: <LayoutDashboard className="w-4 h-4 text-emerald-500" /> }
+            ].map((eff) => {
+              const isActive = drawEffect === eff.id;
+              return (
+                <button
+                  key={eff.id}
+                  type="button"
+                  onClick={() => {
+                    const nextEffect = eff.id as GameState['drawEffect'];
+                    setDrawEffect(nextEffect);
+                    saveQuickDrawConfig({ drawEffect: nextEffect });
                     soundEngine.unlockAudio().then(() => {
-                      soundEngine.playMarbleBounce(0.5);
+                      soundEngine.playWin(eff.id);
                     });
                   }}
                   className={cn(
-                    "relative p-4 rounded-2xl border-2 text-left transition-all flex flex-col justify-between gap-3 group",
-                    isSelected
-                      ? "bg-white/10 border-amber-400 shadow-lg shadow-amber-400/20 scale-[1.02]"
-                      : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
+                    "p-2 rounded-xl border transition-all text-center flex flex-col items-center gap-1.5 cursor-pointer",
+                    isActive
+                      ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"
+                      : "bg-white border-slate-200/80 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
                   )}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-2xl sm:text-3xl p-1 bg-white/5 rounded-xl border border-white/10">{theme.icon}</span>
-                    {isSelected ? (
-                      <span className="text-[10px] font-black bg-amber-400 text-slate-950 px-2 py-0.5 rounded-full shadow-xs">
-                        기본 맵 적용
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-slate-500 group-hover:text-slate-300">
-                        클릭하여 선택
-                      </span>
-                    )}
+                  <div className={cn(
+                    "w-7 h-7 rounded-lg flex items-center justify-center",
+                    isActive ? "bg-white/20 text-white" : "bg-slate-50"
+                  )}>
+                    {eff.icon}
                   </div>
-                  <div>
-                    <h5 className="text-sm font-black text-white group-hover:text-amber-300 transition-colors">
-                      {theme.name}
-                    </h5>
-                    <p className="text-[11px] text-slate-300 mt-1 line-clamp-2 leading-relaxed">
-                      {theme.desc}
-                    </p>
-                  </div>
+                  <span className="text-[11px] font-bold whitespace-nowrap">{eff.name}</span>
                 </button>
               );
             })}
           </div>
+        </div>
+      </div>
 
-          {/* Marble Race Map Length Selection */}
-          <div className="mt-5 pt-5 border-t border-slate-800/80">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-              <div>
-                <h5 className="text-xs font-black text-white flex items-center gap-1.5">
-                  <span>📏</span>
-                  <span>구슬 레이스 맵 길이</span>
-                </h5>
-                <p className="text-[11px] text-slate-400">
-                  길이에 따라 트랙 높이 및 장애물/오브젝트 수가 자동으로 조정됩니다.
-                </p>
-              </div>
-              <span className="text-[11px] font-black text-emerald-400 bg-emerald-400/15 px-2.5 py-0.5 rounded-full border border-emerald-400/30 w-fit">
-                선택됨: {MAP_LENGTHS.find(l => l.id === marbleMapLength)?.name}
-              </span>
-            </div>
-            <div className="grid grid-cols-3 gap-2.5">
-              {MAP_LENGTHS.map(len => {
-                const isSelected = marbleMapLength === len.id;
-                return (
-                  <button
-                    key={len.id}
-                    type="button"
-                    onClick={() => {
-                      setMarbleMapLength(len.id);
-                      saveQuickDrawConfig({ marbleMapLength: len.id });
-                      soundEngine.unlockAudio().then(() => {
-                        soundEngine.playMarbleBounce(0.4);
-                      });
-                    }}
-                    className={cn(
-                      "p-3 rounded-2xl border-2 text-left transition-all flex flex-col gap-1 cursor-pointer",
-                      isSelected
-                        ? "bg-emerald-500/15 border-emerald-400 shadow-lg shadow-emerald-500/10"
-                        : "bg-slate-900/60 border-slate-800 hover:border-slate-700 hover:bg-white/5"
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-black text-white flex items-center gap-1.5">
-                        <span>{len.icon}</span>
-                        <span>{len.name}</span>
-                      </span>
-                      {isSelected && (
-                        <span className="text-[10px] font-black bg-emerald-400 text-slate-950 px-2 py-0.5 rounded-full">
-                          선택
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-slate-300 leading-snug">
-                      {len.desc}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
+      {/* Slim Inline Marble Race Map & Length Bar */}
+      {drawEffect === 'marble' && (
+        <div className="p-3.5 sm:p-4 bg-indigo-50/60 rounded-2xl border border-indigo-200/70 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-xs font-bold text-indigo-900 mr-1">구슬 맵:</span>
+            {MAP_THEMES.map((theme) => (
+              <button
+                key={theme.id}
+                type="button"
+                onClick={() => {
+                  setMarbleMapTheme(theme.id);
+                  saveQuickDrawConfig({ marbleMapTheme: theme.id });
+                  soundEngine.unlockAudio().then(() => {
+                    soundEngine.playMarbleBounce(0.5);
+                  });
+                }}
+                title={theme.desc}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer",
+                  marbleMapTheme === theme.id
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
+                )}
+              >
+                <span>{theme.icon}</span>
+                <span>{theme.name}</span>
+              </button>
+            ))}
           </div>
-        </motion.div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-indigo-900 mr-1">길이:</span>
+            {MAP_LENGTHS.map(len => (
+              <button
+                key={len.id}
+                type="button"
+                onClick={() => {
+                  setMarbleMapLength(len.id);
+                  saveQuickDrawConfig({ marbleMapLength: len.id });
+                  soundEngine.unlockAudio().then(() => {
+                    soundEngine.playMarbleBounce(0.4);
+                  });
+                }}
+                title={len.desc}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1 cursor-pointer",
+                  marbleMapLength === len.id
+                    ? "bg-emerald-600 text-white border-emerald-600 shadow-2xs"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-emerald-300"
+                )}
+              >
+                <span>{len.icon}</span>
+                <span>{len.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1638,18 +1565,21 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       </Modal>
 
       {/* Tabs Navigation */}
-      <div className="flex bg-white p-1 rounded-2xl shadow-sm border border-slate-200 w-fit">
+      <div className="flex bg-white p-1 rounded-xl border border-slate-200 w-fit">
         <button 
           onClick={() => setActiveTab('dashboard')}
           className={cn(
-            "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
-            activeTab === 'dashboard' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-500 hover:text-slate-700"
+            "px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2",
+            activeTab === 'dashboard' ? "bg-indigo-600 text-white" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           )}
         >
           <LayoutDashboard className="w-4 h-4" />
           대시보드
           {pendingTicketRequests.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[10px] rounded-full font-black animate-pulse">
+            <span className={cn(
+              "px-1.5 py-0.5 text-[10px] rounded-full font-black",
+              activeTab === 'dashboard' ? "bg-amber-400 text-slate-950" : "bg-amber-500 text-white"
+            )}>
               {pendingTicketRequests.length}
             </span>
           )}
@@ -1657,23 +1587,18 @@ function TeacherView({ students, entries, gameState, admins, user }: {
         <button 
           onClick={() => setActiveTab('students')}
           className={cn(
-            "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
-            activeTab === 'students' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-500 hover:text-slate-700"
+            "px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2",
+            activeTab === 'students' ? "bg-indigo-600 text-white" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           )}
         >
           <Users className="w-4 h-4" />
           학생 관리
-          {pendingTicketRequests.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-amber-500 text-white text-[10px] rounded-full font-black animate-pulse">
-              {pendingTicketRequests.length}
-            </span>
-          )}
         </button>
         <button 
           onClick={() => setActiveTab('settings')}
           className={cn(
-            "px-6 py-2 rounded-xl font-bold transition-all flex items-center gap-2",
-            activeTab === 'settings' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-slate-500 hover:text-slate-700"
+            "px-4 py-2 rounded-lg text-sm font-bold transition-colors flex items-center gap-2",
+            activeTab === 'settings' ? "bg-indigo-600 text-white" : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           )}
         >
           <Settings className="w-4 h-4" />
@@ -1682,61 +1607,85 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       </div>
 
       {activeTab === 'dashboard' && (
-        <div className="space-y-8">
+        <div className="space-y-5">
           {renderTicketRequestsSection()}
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4">
-              <div className="p-3 bg-blue-100 rounded-2xl">
-                <Users className="w-6 h-6 text-blue-600" />
+          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2.5 bg-blue-50 rounded-xl shrink-0">
+                <Users className="w-5 h-5 text-blue-600" />
               </div>
-              <div>
-                <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">참여 학생</h3>
-                <p className="text-2xl font-black text-slate-900">{filteredStudents.length}명</p>
-              </div>
-            </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4">
-              <div className="p-3 bg-green-100 rounded-2xl">
-                <Ticket className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">응모 건수</h3>
-                <p className="text-2xl font-black text-slate-900">{filteredEntries.length}건</p>
+              <div className="min-w-0">
+                <h3 className="text-slate-500 font-semibold text-xs">참여 학생</h3>
+                <p className="text-xl sm:text-2xl font-black text-slate-900">{filteredStudents.length}명</p>
               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-200 flex items-center gap-4">
-              <div className="p-3 bg-yellow-100 rounded-2xl">
-                <Trophy className="w-6 h-6 text-yellow-600" />
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2.5 bg-emerald-50 rounded-xl shrink-0">
+                <Ticket className="w-5 h-5 text-emerald-600" />
               </div>
-              <div>
-                <h3 className="text-slate-500 font-bold uppercase text-[10px] tracking-wider">총 누적 당첨금</h3>
-                <p className="text-2xl font-black text-slate-900">{totalPrizeAll.toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}</p>
+              <div className="min-w-0">
+                <h3 className="text-slate-500 font-semibold text-xs">응모 건수</h3>
+                <p className="text-xl sm:text-2xl font-black text-slate-900">{filteredEntries.length}건</p>
+              </div>
+            </div>
+            <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 flex items-center gap-3">
+              <div className="p-2.5 bg-amber-50 rounded-xl shrink-0">
+                <Trophy className="w-5 h-5 text-amber-600" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="text-slate-500 font-semibold text-xs truncate">누적 당첨금</h3>
+                <p className="text-lg sm:text-2xl font-black text-slate-900 truncate">{totalPrizeAll.toLocaleString()}{currencyUnit}</p>
               </div>
             </div>
           </div>
 
           {/* Game Control */}
-          <section className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <div className="flex items-center justify-between mb-8">
+          <section className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-black text-slate-900">추첨 컨트롤 타워</h2>
-                <p className="text-slate-400">현재 {gameState?.round || 1}라운드가 진행 중입니다.</p>
+                <h2 className="text-lg sm:text-xl font-black text-slate-900">추첨 컨트롤 타워</h2>
+                <p className="text-xs text-slate-500 mt-0.5">현재 {gameState?.round || 1}라운드 · 총 {filteredStudents.length}명 중 {uniqueEnteredCount}명 응모 완료 ({entryProgress}%)</p>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap items-center gap-2">
                 <button 
                   onClick={() => setShowQr(!showQr)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 flex items-center gap-2 font-bold transition-all"
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl text-slate-700 flex items-center gap-1.5 font-bold text-xs transition-colors"
                 >
                   <QrCode className="w-4 h-4" />
                   QR 코드
                 </button>
                 <button 
                   onClick={resetGame}
-                  className="px-4 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 flex items-center gap-2 font-bold transition-all"
+                  className="px-3.5 py-2 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 flex items-center gap-1.5 font-bold text-xs transition-colors"
                 >
                   <RotateCcw className="w-4 h-4" />
                   초기화
                 </button>
+                {gameState?.status === 'waiting' ? (
+                  <button 
+                    onClick={startDrawing}
+                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                  >
+                    <Play className="w-4 h-4 fill-current" />
+                    추첨 시작하기
+                  </button>
+                ) : (
+                  <>
+                    <button 
+                      onClick={nextRound}
+                      className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl font-bold text-xs transition-colors"
+                    >
+                      다음 라운드
+                    </button>
+                    <button 
+                      onClick={() => setDoc(doc(db, 'gameState', user!.email!), { ...gameState, status: 'drawing' }, { merge: true })}
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-colors"
+                    >
+                      추첨 화면으로
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1744,94 +1693,46 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               <motion.div 
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
-                className="mb-8 flex flex-col items-center p-8 bg-indigo-50 rounded-3xl border border-indigo-100"
+                className="flex flex-col items-center p-6 bg-indigo-50/70 rounded-2xl border border-indigo-100"
               >
-                <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?admin=${user?.email}`} size={240} />
-                <p className="mt-6 text-indigo-900 font-bold">학생들이 이 QR을 찍고 접속하게 하세요.</p>
-                <p className="text-indigo-400 text-sm mt-1">{user?.email} 학급 전용</p>
+                <QRCodeSVG value={`${window.location.origin}${window.location.pathname}?admin=${user?.email}`} size={200} />
+                <p className="mt-4 text-sm text-indigo-900 font-bold">학생들이 QR 코드를 스캔해 입장하세요.</p>
+                <p className="text-indigo-500 text-xs mt-0.5">{user?.email} 학급 전용</p>
               </motion.div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">응모 현황</span>
-                  <span className="text-2xl font-black text-indigo-600">{entryProgress}%</span>
-                </div>
-                <div className="w-full bg-slate-200 h-3 rounded-full overflow-hidden mb-4">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${entryProgress}%` }}
-                    className="bg-indigo-600 h-full relative"
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent animate-pulse" />
-                  </motion.div>
-                </div>
-                <p className="text-sm text-slate-500 font-medium mb-4">
-                  총 {filteredStudents.length}명 중 <span className="text-slate-900 font-bold">{uniqueEnteredCount}명</span> 응모 완료
-                </p>
-
-                {pendingStudents.length > 0 && (
-                  <div className="pt-4 border-t border-slate-100">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-                      <AlertCircle className="w-3 h-3 text-amber-500" />
-                      미응모 학생 명단
-                    </p>
-                    <div className="flex flex-wrap gap-2 max-h-[100px] overflow-y-auto pr-2 scrollbar-thin">
-                      {pendingStudents.map(s => (
-                        <span key={s.id} className="px-2 py-1 bg-amber-50 text-[10px] text-amber-700 font-bold rounded-lg border border-amber-100">
-                          {s.name}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+            {/* Slim Entry Progress Bar */}
+            <div className="space-y-2">
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${entryProgress}%` }}
+                  className="bg-indigo-600 h-full rounded-full"
+                />
               </div>
-
-              <div className="flex flex-col justify-center gap-4">
-                {gameState?.status === 'waiting' ? (
-                  <button 
-                    onClick={startDrawing}
-                    className="w-full py-6 bg-indigo-600 hover:bg-indigo-700 text-white rounded-3xl font-black text-xl shadow-xl shadow-indigo-200 transition-all flex items-center justify-center gap-3"
-                  >
-                    <Play className="w-6 h-6 fill-current" />
-                    추첨 시작하기
-                  </button>
-                ) : (
-                  <div className="flex gap-4">
-                    <button 
-                      onClick={nextRound}
-                      className="flex-1 py-4 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-2xl font-bold transition-all"
-                    >
-                      다음 라운드
-                    </button>
-                    <button 
-                      onClick={() => setDoc(doc(db, 'gameState', user!.email!), { ...gameState, status: 'drawing' }, { merge: true })}
-                      className="flex-1 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-100 transition-all"
-                    >
-                      추첨 화면으로
-                    </button>
-                  </div>
-                )}
-              </div>
+              {pendingStudents.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] font-bold text-amber-700 flex items-center gap-1 mr-1">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-500" />
+                    미응모 ({pendingStudents.length}명):
+                  </span>
+                  {pendingStudents.map(s => (
+                    <span key={s.id} className="px-2 py-0.5 bg-amber-50 text-[11px] text-amber-800 font-semibold rounded-md border border-amber-200/70">
+                      {s.name}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            <div className="mt-6 pt-6 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-3">
-                <label className="text-xs font-black text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
-                  빠른 추첨 설정 (선택 즉시 자동 저장 · 바로 시작 가능)
-                </label>
-              </div>
-              {renderDrawConfigPanel()}
-            </div>
+            {renderDrawConfigPanel()}
 
             {gameState?.status === 'finished' && (
               <button 
                 onClick={exportResults}
-                className="w-full mt-6 bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-100"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 text-sm transition-colors"
               >
-                <FileSpreadsheet className="w-5 h-5" />
+                <FileSpreadsheet className="w-4 h-4" />
                 결과 엑셀 다운로드
               </button>
             )}
@@ -2088,23 +1989,20 @@ function TeacherView({ students, entries, gameState, admins, user }: {
       )}
 
       {activeTab === 'settings' && (
-        <div className="space-y-8">
-          <section className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <h2 className="text-xl font-bold flex items-center gap-2 mb-8 text-slate-900">
-              <Settings className="w-5 h-5 text-indigo-600" />
-              추첨 시스템 설정
-            </h2>
+        <div className="space-y-6">
+          <section className="bg-white p-6 sm:p-7 rounded-2xl border border-slate-200/80 space-y-8">
+            <div>
+              <h2 className="text-lg font-black flex items-center gap-2 text-slate-900">
+                <Settings className="w-5 h-5 text-indigo-600" />
+                당첨 기준 및 학급 브랜딩 설정
+              </h2>
+              <p className="text-xs text-slate-500 mt-1">추첨 인원, 배속, 추첨 방식은 대시보드에서 바로 선택하고 시작할 수 있습니다.</p>
+            </div>
             
-            <div className="space-y-12">
-              <div className="space-y-8">
+            <div className="space-y-8">
                 <div>
-                  <label className="block text-sm font-bold text-slate-600 uppercase tracking-wider mb-3">추첨 시스템 기본 설정</label>
-                  {renderDrawConfigPanel()}
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-black text-slate-700 uppercase tracking-wider">당첨 등수 및 상금 상세 설정</h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">당첨 등수 및 상금 상세 설정</h3>
                     <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl">
                       {[1, 2, 3, 4, 5].map(num => (
                         <button
@@ -2243,24 +2141,23 @@ function TeacherView({ students, entries, gameState, admins, user }: {
                     </div>
                   </div>
 
-                  <div className="flex flex-col gap-4 h-full justify-center">
+                  <div className="flex flex-col gap-3 h-full justify-center">
                     <button 
                       onClick={updateGameSettings}
-                      className="w-full py-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.5rem] font-black text-xl shadow-xl shadow-indigo-100 transition-all active:scale-95 flex items-center justify-center gap-3"
+                      className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-base transition-colors flex items-center justify-center gap-2"
                     >
-                      <ShieldCheck className="w-6 h-6" />
-                      추첨 설정 저장하기
+                      <ShieldCheck className="w-5 h-5" />
+                      설정 저장하기
                     </button>
                     <button 
                       onClick={resetCumulativeStats}
-                      className="w-full py-4 bg-white border border-slate-200 text-slate-400 hover:text-red-500 hover:border-red-200 rounded-[1.5rem] font-bold text-sm transition-all flex items-center justify-center gap-2"
+                      className="w-full py-3 bg-white border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-2"
                     >
                       <RotateCcw className="w-4 h-4" />
                       누적 통계 초기화
                     </button>
                   </div>
                 </div>
-              </div>
             </div>
           </section>
         </div>
@@ -2463,112 +2360,79 @@ function StudentView({ studentName, students, entries, gameState }: {
           )}
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="space-y-5">
           {/* Student Info Card */}
-          <section className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600">
-                <User className="w-8 h-8" />
+          <section className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80 space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 bg-indigo-50 border border-indigo-100 rounded-2xl flex items-center justify-center text-indigo-600">
+                  <User className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900">{studentName}님</h2>
+                  <p className="text-xs text-slate-500">행운의 5개 이름을 선택해보세요.</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-black text-slate-900">{studentName}님</h2>
-                <p className="text-slate-500 font-medium">반갑습니다! 행운을 빌어요.</p>
+
+              <button
+                type="button"
+                onClick={() => setIsRequestModalOpen(true)}
+                className="text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3.5 py-2 rounded-xl border border-indigo-200/70 transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                응모권 추가구매 요청
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200/60">
+                <p className="text-[11px] font-semibold text-slate-500 mb-0.5">보유 응모권</p>
+                <p className="text-xl font-black text-slate-900">{ticketsTotal}장</p>
+              </div>
+              <div className="p-3.5 bg-indigo-50/70 rounded-xl border border-indigo-100">
+                <p className="text-[11px] font-semibold text-indigo-600 mb-0.5">남은 응모</p>
+                <p className="text-xl font-black text-indigo-700">{ticketsLeft}회 <span className="text-[11px] font-medium text-indigo-400">({myEntries.length} 완료)</span></p>
+              </div>
+              <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-100">
+                <p className="text-[11px] font-semibold text-emerald-700 mb-0.5">누적 상금</p>
+                <p className="text-lg sm:text-xl font-black text-emerald-700 truncate">
+                  {(myStudent?.stats?.totalPrize || 0).toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}
+                </p>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col justify-between">
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">보유 응모권</p>
-                  <p className="text-2xl font-black text-slate-900">{ticketsTotal}장</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setIsRequestModalOpen(true)}
-                  className="mt-2 text-xs font-black text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-200/60 transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer shadow-2xs"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                  추가구매 요청
-                </button>
+            {myPendingTickets > 0 && (
+              <div className="px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-2.5 text-xs text-amber-900">
+                <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  <strong>추가구매 +{myPendingTickets}장</strong> 승인 대기 중입니다. 선생님 승인 후 즉시 사용할 수 있습니다.
+                </span>
               </div>
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex flex-col justify-between">
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">남은 응모 횟수</p>
-                  <p className="text-2xl font-black text-indigo-600">{ticketsLeft}회</p>
-                </div>
-                <p className="text-[11px] text-slate-400 mt-2 font-medium">
-                  {myEntries.length}회 응모 완료
-                </p>
-              </div>
-              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 col-span-2">
-                <p className="text-xs font-bold text-emerald-600 uppercase tracking-wider mb-1">나의 총 누적 상금</p>
-                <div className="flex items-center justify-between">
-                  <p className="text-3xl font-black text-emerald-700">{(myStudent?.stats?.totalPrize || 0).toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}</p>
-                  <Trophy className="w-6 h-6 text-emerald-500" />
-                </div>
-              </div>
+            )}
 
-              {myPendingTickets > 0 && (
-                <div className="col-span-2 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-center justify-between gap-3 animate-pulse">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0">
-                      <Clock className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-black text-amber-900">
-                        추가구매 승인 대기 중 (+{myPendingTickets}장)
-                      </p>
-                      <p className="text-[11px] text-amber-700 mt-0.5">
-                        선생님이 확인 후 승인하면 응모권이 지급되어 추가 응모할 수 있습니다.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsRequestModalOpen(true)}
-                    className="px-2.5 py-1.5 bg-amber-200/80 hover:bg-amber-300 text-amber-900 text-xs font-black rounded-xl transition-all shrink-0 cursor-pointer"
-                  >
-                    더 요청
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {myStudent?.stats && (myStudent.stats.totalPrize > 0 || Object.keys(myStudent.stats.wins).length > 0) && (
-              <div className="mt-6 pt-6 border-t border-slate-100 bg-emerald-50/50 p-4 rounded-2xl border border-emerald-100/50">
-                <p className="text-xs font-bold text-emerald-700 uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <Sparkles className="w-4 h-4" />
-                  나의 누적 당첨 통계
-                </p>
-                <div className="flex flex-wrap gap-4 items-center">
-                  <div className="flex-1 min-w-[120px]">
-                    <p className="text-[10px] font-bold text-emerald-600 mb-1">총 당첨 금액</p>
-                    <p className="text-xl font-black text-emerald-700">{(myStudent.stats.totalPrize || 0).toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}</p>
-                  </div>
-                  <div className="flex-1 min-w-[150px] flex flex-wrap gap-2">
-                    {Object.entries(myStudent.stats.wins).sort((a,b) => parseInt(a[0]) - parseInt(b[0])).map(([rank, count]) => (
-                      <div key={rank} className="px-3 py-1 bg-white rounded-lg border border-emerald-200 text-xs shadow-sm">
-                        <span className="font-bold text-emerald-700">{rank}등</span>
-                        <span className="ml-2 font-black text-slate-900">{count}회</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+            {myStudent?.stats && Object.keys(myStudent.stats.wins).length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-slate-100">
+                <span className="text-xs font-bold text-slate-500 mr-1">당첨 이력:</span>
+                {Object.entries(myStudent.stats.wins).sort((a,b) => parseInt(a[0]) - parseInt(b[0])).map(([rank, count]) => (
+                  <span key={rank} className="px-2.5 py-1 bg-emerald-50 border border-emerald-200/70 rounded-lg text-xs font-bold text-emerald-800">
+                    {rank}등 · {count}회
+                  </span>
+                ))}
               </div>
             )}
           </section>
 
           {/* Entry Form */}
           {ticketsLeft > 0 ? (
-            <section className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-              <div className="flex items-center justify-between mb-8">
-                <h3 className="text-xl font-bold text-slate-900">번호 선택하기</h3>
-                <span className="text-sm font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+            <section className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80">
+              <div className="flex items-center justify-between mb-5">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">번호 선택하기</h3>
+                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
                   5개 선택 ({selectedNames.length}/5)
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-8">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 mb-6">
                 {filteredStudents.map(s => (
                   <button
                     key={s.id}
@@ -2580,10 +2444,10 @@ function StudentView({ studentName, students, entries, gameState }: {
                       }
                     }}
                     className={cn(
-                      "p-4 rounded-2xl font-bold transition-all border-2 text-sm",
+                      "py-3 px-3 rounded-xl font-bold transition-all border text-sm",
                       selectedNames.includes(s.name)
-                        ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100 scale-[1.02]"
-                        : "bg-white border-slate-100 text-slate-600 hover:border-indigo-200"
+                        ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"
+                        : "bg-slate-50/70 border-slate-200 text-slate-700 hover:border-indigo-300 hover:bg-white"
                     )}
                   >
                     {s.name}
@@ -2595,51 +2459,32 @@ function StudentView({ studentName, students, entries, gameState }: {
                 onClick={submitEntry}
                 disabled={selectedNames.length !== 5}
                 className={cn(
-                  "w-full py-5 rounded-2xl font-black text-lg transition-all shadow-xl",
+                  "w-full py-3.5 rounded-xl font-bold text-base transition-colors",
                   selectedNames.length === 5
-                    ? "bg-indigo-600 text-white shadow-indigo-200 hover:bg-indigo-700 cursor-pointer"
-                    : "bg-slate-100 text-slate-300 cursor-not-allowed shadow-none"
+                    ? "bg-indigo-600 text-white hover:bg-indigo-700 cursor-pointer"
+                    : "bg-slate-100 text-slate-400 cursor-not-allowed"
                 )}
               >
                 응모하기
               </button>
             </section>
           ) : (
-            <section className="bg-indigo-600 p-8 rounded-3xl shadow-xl shadow-indigo-200 text-center text-white">
-              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-6">
-                <CheckCircle2 className="w-8 h-8" />
+            <section className="bg-white p-6 sm:p-8 rounded-2xl border border-indigo-200 text-center space-y-3">
+              <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-2xl font-black mb-2">응모 완료!</h3>
-              <p className="text-indigo-100 font-medium">추첨이 시작될 때까지 잠시만 기다려주세요.</p>
-
-              {/* Additional Ticket Request CTA */}
-              <div className="mt-6 pt-6 border-t border-indigo-500/50 flex flex-col items-center">
-                {myPendingTickets > 0 ? (
-                  <div className="bg-white/10 backdrop-blur-md px-5 py-3 rounded-2xl border border-white/20 text-center max-w-md w-full animate-pulse">
-                    <p className="text-sm font-black text-amber-300 flex items-center justify-center gap-1.5">
-                      <Clock className="w-4 h-4" />
-                      추가구매 승인 대기 중 (+{myPendingTickets}장)
-                    </p>
-                    <p className="text-xs text-indigo-100 mt-1">
-                      선생님이 승인하면 번호 선택 화면이 즉시 다시 나타납니다.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center gap-3">
-                    <p className="text-sm text-indigo-100 font-medium">
-                      응모권을 추가로 구매하여 더 많은 번호를 응모하시겠습니까?
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setIsRequestModalOpen(true)}
-                      className="px-6 py-3 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-2xl shadow-lg transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
-                    >
-                      <Plus className="w-4 h-4" />
-                      응모권 추가구매 요청하기
-                    </button>
-                  </div>
-                )}
-              </div>
+              <h3 className="text-lg font-black text-slate-900">응모가 완료되었습니다</h3>
+              <p className="text-sm text-slate-500">선생님이 추첨을 시작할 때까지 잠시만 기다려주세요.</p>
+              {myPendingTickets === 0 && (
+                <button
+                  type="button"
+                  onClick={() => setIsRequestModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  응모권 추가구매 요청하기
+                </button>
+              )}
             </section>
           )}
 
@@ -3182,7 +3027,7 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
         <div className="absolute bottom-0 right-1/4 w-96 h-96 bg-purple-500 rounded-full blur-[120px] mix-blend-screen animate-pulse delay-700" />
       </div>
 
-      <div className="relative flex-1 flex flex-col overflow-y-auto scrollbar-hide py-12 px-4">
+      <div className="relative flex-1 flex flex-col overflow-y-auto scrollbar-hide py-5 px-4">
         <AnimatePresence>
           {showFlash && (
             <motion.div 
@@ -3194,110 +3039,99 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
           )}
         </AnimatePresence>
 
-        {/* School Logo in Drawing */}
-        {gameState?.theme?.schoolLogoUrl && (
-          <motion.img 
-            initial={{ y: -50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            src={gameState.theme.schoolLogoUrl} 
-            className="absolute top-8 left-8 w-16 h-16 object-contain opacity-50 hidden sm:block" 
-            referrerPolicy="no-referrer"
-          />
-        )}
-
-        {/* Cancel Button */}
-        {isAdmin && (
-          <button 
-            onClick={handleCancel}
-            className="absolute top-8 right-8 bg-slate-800/80 hover:bg-red-600/80 text-white px-4 py-2 rounded-xl border border-slate-700 transition-all flex items-center gap-2 z-[80] shadow-xl backdrop-blur-md"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span className="text-sm font-bold">중지</span>
-          </button>
-        )}
-
+        {/* Unified Top Header Bar */}
         <div className={cn(
-          "mx-auto w-full flex flex-col items-center",
-          effect === 'running' ? "max-w-[1440px]" : "max-w-4xl"
+          "mx-auto w-full flex flex-wrap items-center justify-between gap-3 mb-5 px-4 py-2.5 bg-slate-900/80 backdrop-blur-md rounded-2xl border border-slate-800 z-[70]",
+          effect === 'running' ? "max-w-[1440px]" : "max-w-5xl"
         )}>
-          <motion.h2 
-            animate={isAnimating ? { scale: [1, 1.05, 1] } : {}}
-            transition={{ duration: 0.5, repeat: Infinity }}
-            className="text-2xl sm:text-4xl font-black text-white mb-4 flex items-center justify-center gap-3 text-center"
-          >
-            <Sparkles style={{ color: gameState?.theme?.primaryColor || '#fbbf24' }} className="w-8 h-8" />
-            <span className="drop-shadow-lg">
-              {effect === 'standard' && '네온 코어 퀀텀 추첨 중!'}
-              {effect === 'marble' && '박진감 넘치는 구슬 레이스!'}
-              {effect === 'running' && '운동회 달리기 대작전!'}
-              {effect === 'slot' && '라스베가스 777 잭팟 슬롯!'}
-              {effect === 'explosion' && '코스믹 초신성 대폭발 추첨!'}
-              {effect === 'card' && '운명의 3D 홀로그램 타로 플립!'}
-              {effect === 'box' && '전설의 황금 보물상자 개봉!'}
-              {effect === 'machine' && '에어로 볼 토네이도 머신!'}
-              {effect === 'board' && '사이버네틱 스테이지 전광판!'}
-            </span>
-            <Sparkles style={{ color: gameState?.theme?.primaryColor || '#fbbf24' }} className="w-8 h-8" />
-          </motion.h2>
+          <div className="flex items-center gap-2.5 min-w-0">
+            {gameState?.theme?.schoolLogoUrl ? (
+              <img src={gameState.theme.schoolLogoUrl} className="w-7 h-7 object-contain rounded-md" referrerPolicy="no-referrer" />
+            ) : (
+              <Sparkles style={{ color: gameState?.theme?.primaryColor || '#fbbf24' }} className="w-5 h-5 shrink-0" />
+            )}
+            <h2 className="text-base sm:text-xl font-black text-white truncate">
+              {effect === 'standard' && '네온 코어 퀀텀 추첨'}
+              {effect === 'marble' && '구슬 레이스'}
+              {effect === 'running' && '운동회 달리기 대작전'}
+              {effect === 'slot' && '라스베가스 777 슬롯'}
+              {effect === 'explosion' && '초신성 대폭발 추첨'}
+              {effect === 'card' && '홀로그램 타로 플립'}
+              {effect === 'box' && '전설의 황금 보물상자'}
+              {effect === 'machine' && '에어로 볼 머신'}
+              {effect === 'board' && '사이버 전광판'}
+            </h2>
+          </div>
 
-          <div className="mb-8 flex flex-wrap items-center justify-center gap-3">
+          <div className="flex flex-wrap items-center gap-2">
             {!audioUnlocked && (
               <button 
                 onClick={unlockAudio}
-                className="text-xs bg-slate-800/80 text-slate-400 px-4 py-1.5 rounded-full hover:bg-slate-700 transition-all flex items-center gap-2 border border-slate-700 backdrop-blur-sm"
+                className="text-xs bg-slate-800 text-slate-300 px-3 py-1.5 rounded-xl hover:bg-slate-700 transition-colors flex items-center gap-1.5 border border-slate-700"
               >
-                <Volume2 className="w-3 h-3" />
-                소리가 안 들린다면 클릭하세요
+                <Volume2 className="w-3.5 h-3.5" />
+                소리 켜기
               </button>
             )}
-            {audioUnlocked && <p className="text-[10px] text-green-500 uppercase tracking-widest font-bold flex items-center gap-1">Audio Ready <CheckCircle2 className="w-2 h-2" /></p>}
 
-            {/* Live Roulette / Drawing Speed Multiplier Bar */}
-            <div className="flex flex-wrap items-center gap-2 bg-slate-900/90 backdrop-blur-md px-3 py-1.5 rounded-2xl border border-slate-800 shadow-lg">
+            {/* Unified Live Speed Multiplier Bar */}
+            <div className="flex items-center gap-2 bg-slate-950/70 px-3 py-1.5 rounded-xl border border-slate-800">
+              <Zap className="w-3.5 h-3.5 text-amber-400 shrink-0" />
               <div className="flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span className="text-[11px] font-black text-slate-300 mr-1">배속</span>
-                {[0.5, 1, 1.5, 2, 3, 4].map(spd => (
+                {[1, 2, 4].map(spd => (
                   <button
                     key={spd}
                     type="button"
                     onClick={() => changeSpeed(spd)}
                     className={cn(
-                      "px-2 py-0.5 rounded-lg text-xs font-black transition-all",
+                      "px-2 py-0.5 rounded-md text-xs font-bold transition-colors",
                       drawSpeed === spd
-                        ? "bg-amber-400 text-slate-950 shadow-sm font-black scale-105"
+                        ? "bg-amber-400 text-slate-950"
                         : "text-slate-400 hover:text-white hover:bg-slate-800"
                     )}
-                    title={`추첨 배속 ${spd}x 설정`}
                   >
                     {spd}x
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
-                <input
-                  type="range"
-                  min="0.2"
-                  max="5"
-                  step="0.1"
-                  value={drawSpeed}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value);
-                    setDrawSpeed(val);
-                    drawSpeedRef.current = val;
-                  }}
-                  onMouseUp={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
-                  onTouchEnd={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
-                  onKeyUp={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
-                  className="w-24 sm:w-28 accent-amber-400 cursor-pointer"
-                  title="세밀한 배속 조절 (0.2x ~ 5.0x)"
-                />
-                <span className="text-xs font-black text-amber-400 min-w-[36px] text-right">
-                  {drawSpeed.toFixed(1)}x
-                </span>
-              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="5"
+                step="0.1"
+                value={drawSpeed}
+                onChange={(e) => {
+                  const val = parseFloat(e.target.value);
+                  setDrawSpeed(val);
+                  drawSpeedRef.current = val;
+                }}
+                onMouseUp={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
+                onTouchEnd={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
+                onKeyUp={(e) => changeSpeed(parseFloat((e.target as HTMLInputElement).value))}
+                className="w-20 sm:w-24 accent-amber-400 cursor-pointer"
+                title="세밀한 배속 조절 (0.2x ~ 5.0x)"
+              />
+              <span className="text-xs font-black text-amber-400 min-w-[34px] text-right">
+                {drawSpeed.toFixed(1)}x
+              </span>
             </div>
+
+            {isAdmin && (
+              <button 
+                onClick={handleCancel}
+                className="bg-slate-800 hover:bg-red-600 text-slate-200 hover:text-white px-3 py-1.5 rounded-xl border border-slate-700 transition-colors flex items-center gap-1.5 text-xs font-bold"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                중지
+              </button>
+            )}
           </div>
+        </div>
+
+        <div className={cn(
+          "mx-auto w-full flex flex-col items-center",
+          effect === 'running' ? "max-w-[1440px]" : "max-w-4xl"
+        )}>
 
           {(() => {
             const handleRaceWinnerDetermined = (winnerName: string) => {
@@ -3395,23 +3229,8 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
             {/* Main Animation Area */}
             <div className={cn(
               "relative w-full flex items-center justify-center",
-              effect === 'board' ? "max-w-5xl min-h-[380px] mb-8" : "aspect-video sm:aspect-square max-h-[400px] max-w-2xl mb-12"
+              effect === 'board' ? "max-w-5xl min-h-[380px] mb-8" : "aspect-video sm:aspect-square max-h-[380px] max-w-2xl mb-8"
             )}>
-              {/* Interactive Trigger Overlay */}
-              {!isAnimating && drawn.length < (gameState.numWinners || 5) && (
-                <motion.button
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.95 }}
-                  onClick={pickNext}
-                  style={{ backgroundColor: gameState?.theme?.primaryColor || '#fbbf24' }}
-                  className="absolute z-[70] text-slate-900 font-black px-10 py-5 rounded-2xl shadow-2xl flex items-center gap-3 text-2xl border-b-4 border-slate-900/20"
-                >
-                  <Play className="w-7 h-7 fill-current" />
-                  추첨 시작!
-                </motion.button>
-              )}
 
         {effect === 'standard' && (
           <StandardOrbEffect 
@@ -3544,15 +3363,15 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
 
       {!isAnimating && drawn.length < (gameState.numWinners || 5) && (
         <motion.button
-          initial={{ y: 50, opacity: 0 }}
+          initial={{ y: 20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
           onClick={pickNext}
-          className="bg-gradient-to-r from-yellow-400 to-orange-500 text-slate-950 font-black text-lg sm:text-xl py-5 px-10 rounded-3xl shadow-[0_10px_30px_rgba(251,191,36,0.3)] transition-all flex items-center gap-4 border-b-8 border-orange-700 mb-8"
+          className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-base sm:text-lg py-3.5 px-8 rounded-2xl shadow-lg transition-colors flex items-center gap-2.5 mb-8 cursor-pointer"
         >
-          <Play className="w-6 h-6 fill-current" />
-          {drawn.length + 1}번째 주인공 계속 추첨!
+          <Play className="w-5 h-5 fill-current" />
+          {drawn.length === 0 ? '추첨 시작하기' : `${drawn.length + 1}번째 번호 추첨하기`}
         </motion.button>
       )}
       </div>
@@ -3604,21 +3423,21 @@ function ResultsView({ students, entries, gameState, myEntries }: {
   const hasAnyWin = myResults.some(r => r.rank > 0);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5">
       {hasAnyWin && <Confetti recycle={false} numberOfPieces={500} />}
       
       {/* Winning Numbers */}
-      <section className="bg-slate-900 p-8 rounded-3xl shadow-md border border-slate-800 text-center">
-        <h2 className="text-2xl font-bold mb-6 text-white">당첨 친구들</h2>
-        <div className="flex justify-center gap-3 flex-wrap">
+      <section className="bg-white p-6 rounded-2xl border border-slate-200/80 text-center">
+        <h2 className="text-lg font-black mb-4 text-slate-900">당첨 번호</h2>
+        <div className="flex justify-center gap-2.5 flex-wrap">
           {gameState?.winningNumbers.map((n, i) => (
             <motion.div
               key={i}
               initial={{ scale: 0, rotate: -180 }}
               animate={{ scale: 1, rotate: 0 }}
-              transition={{ delay: i * 0.1 }}
-              style={{ backgroundColor: gameState?.theme?.primaryColor || '#eab308' }}
-              className="w-16 h-16 rounded-full flex items-center justify-center text-slate-900 font-bold shadow-lg"
+              transition={{ delay: i * 0.08 }}
+              style={{ backgroundColor: gameState?.theme?.primaryColor || '#fbbf24' }}
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center text-slate-950 font-black text-sm shadow-xs"
             >
               {n}
             </motion.div>
@@ -3628,36 +3447,36 @@ function ResultsView({ students, entries, gameState, myEntries }: {
 
       {/* My Results */}
       {myResults.length > 0 && (
-        <section className="bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-800">
-          <h3 className="text-lg font-bold mb-4 text-white">내 결과 ({myResults.length})</h3>
-          <div className="space-y-3">
+        <section className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80">
+          <h3 className="text-base font-bold mb-4 text-slate-900">내 결과 ({myResults.length})</h3>
+          <div className="space-y-2.5">
             {myResults.map((res, idx) => (
-              <div key={res.entry.id} className="flex items-center justify-between p-4 bg-slate-800 rounded-xl border border-slate-700">
-                <div className="flex flex-col gap-2">
-                  <span className="text-[10px] text-slate-500 font-bold uppercase">#{idx + 1} 응모</span>
-                  <div className="flex gap-2">
+              <div key={res.entry.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-xl border border-slate-200/70">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[11px] text-slate-500 font-bold">#{idx + 1} 응모</span>
+                  <div className="flex flex-wrap gap-1.5">
                     {res.entry.picks.map((p, i) => (
                       <span key={i} className={cn(
-                        "px-2 py-1 rounded-lg text-xs font-bold",
-                        gameState?.winningNumbers.includes(p) ? "text-slate-900" : "bg-slate-700 text-slate-400"
-                      )} style={gameState?.winningNumbers.includes(p) ? { backgroundColor: gameState?.theme?.primaryColor || '#eab308' } : {}}>
+                        "px-2 py-0.5 rounded-lg text-xs font-bold",
+                        gameState?.winningNumbers.includes(p) ? "text-slate-950" : "bg-white border border-slate-200 text-slate-500"
+                      )} style={gameState?.winningNumbers.includes(p) ? { backgroundColor: gameState?.theme?.primaryColor || '#fbbf24' } : {}}>
                         {p}
                       </span>
                     ))}
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-slate-400">{res.matches}개 일치</p>
+                  <p className="text-xs text-slate-500">{res.matches}개 일치</p>
                   {res.isOrderMatched && res.rank > 0 && (
-                    <span className="inline-block text-[10px] font-black text-amber-400 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/30 my-0.5 animate-pulse">
-                      ✨ 순서 일치 (2배 보너스!)
+                    <span className="inline-block text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md my-0.5">
+                      순서 일치 보너스 2배
                     </span>
                   )}
                   <p className={cn(
-                    "text-lg font-bold",
-                    res.rank > 0 ? "text-yellow-400" : "text-slate-500"
+                    "text-base font-black",
+                    res.rank > 0 ? "text-indigo-600" : "text-slate-400"
                   )}>
-                    {res.rank ? `${res.rank}등 당첨! (+${res.totalAmount.toLocaleString()}${gameState?.theme?.currencyUnit || '코인'})` : '낙첨'}
+                    {res.rank ? `${res.rank}등 (+${res.totalAmount.toLocaleString()}${gameState?.theme?.currencyUnit || '코인'})` : '낙첨'}
                   </p>
                 </div>
               </div>
@@ -3667,51 +3486,51 @@ function ResultsView({ students, entries, gameState, myEntries }: {
       )}
 
       {/* Leaderboard */}
-      <section className="bg-slate-900 p-6 rounded-3xl shadow-sm border border-slate-800">
-        <h2 className="text-xl font-bold flex items-center gap-2 mb-6 text-white">
-          <Trophy className="w-5 h-5 text-yellow-500" />
+      <section className="bg-white p-5 sm:p-6 rounded-2xl border border-slate-200/80">
+        <h2 className="text-base font-bold flex items-center gap-2 mb-4 text-slate-900">
+          <Trophy className="w-5 h-5 text-amber-500" />
           당첨자 명단
         </h2>
         
-        <div className="space-y-3">
+        <div className="space-y-2.5">
           {winners.length > 0 ? winners.map((w, i) => (
-            <div key={i} className="flex items-center justify-between p-4 bg-slate-800 rounded-xl border border-slate-700">
-              <div className="flex items-center gap-4">
+            <div key={i} className="flex items-center justify-between p-3.5 bg-slate-50 rounded-xl border border-slate-200/70">
+              <div className="flex items-center gap-3">
                 <div className={cn(
-                  "w-10 h-10 rounded-full flex items-center justify-center font-bold",
-                  w.rank === 1 ? "text-slate-900" :
-                  w.rank === 2 ? "bg-slate-400 text-slate-900" :
-                  "bg-orange-600 text-white"
-                )} style={w.rank === 1 ? { backgroundColor: gameState?.theme?.primaryColor || '#eab308' } : {}}>
-                  {w.rank}
+                  "w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm",
+                  w.rank === 1 ? "text-slate-950" :
+                  w.rank === 2 ? "bg-slate-200 text-slate-800" :
+                  "bg-amber-100 text-amber-900"
+                )} style={w.rank === 1 ? { backgroundColor: gameState?.theme?.primaryColor || '#fbbf24' } : {}}>
+                  {w.rank}등
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="font-bold text-white">{w.studentName}</p>
+                    <p className="font-bold text-slate-900 text-sm">{w.studentName}</p>
                     {w.isOrderMatched && (
-                      <span className="text-[10px] font-black text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded border border-amber-500/40 animate-pulse">
-                        ✨ 순서 일치 (2배 보너스!)
+                      <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                        순서일치 2배
                       </span>
                     )}
                   </div>
                   <div className="flex flex-wrap gap-1 mt-1">
                     {w.picks.map((p, idx) => (
                       <span key={idx} className={cn(
-                        "text-[9px] px-1.5 py-0.5 rounded font-medium",
-                        gameState?.winningNumbers.includes(p) ? "text-slate-900" : "bg-slate-700 text-slate-400"
-                      )} style={gameState?.winningNumbers.includes(p) ? { backgroundColor: gameState?.theme?.primaryColor || '#eab308' } : {}}>
+                        "text-[10px] px-1.5 py-0.5 rounded font-semibold",
+                        gameState?.winningNumbers.includes(p) ? "text-slate-950" : "bg-white border border-slate-200 text-slate-500"
+                      )} style={gameState?.winningNumbers.includes(p) ? { backgroundColor: gameState?.theme?.primaryColor || '#fbbf24' } : {}}>
                         {p}
                       </span>
                     ))}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    {w.matches}개 일치 · <span className="text-emerald-400 font-bold">+{w.totalAmount.toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}</span>
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    {w.matches}개 일치 · <span className="text-emerald-600 font-bold">+{w.totalAmount.toLocaleString()}{gameState?.theme?.currencyUnit || '코인'}</span>
                   </p>
                 </div>
               </div>
             </div>
           )) : (
-            <p className="text-center text-slate-500 py-8">당첨자가 없습니다.</p>
+            <p className="text-center text-slate-400 text-sm py-6">당첨자가 없습니다.</p>
           )}
         </div>
       </section>

@@ -270,11 +270,9 @@ export default function MarbleRace({
   const [mapTheme, setMapTheme] = useState<MapTheme>(initialMapTheme);
   const [mapLength, setMapLength] = useState<MapLength>(initialMapLength);
   const mapLengthRef = useRef<MapLength>(initialMapLength);
-  const [speedMultiplier, setSpeedMultiplier] = useState<number>(initialSpeed);
   const speedMultiplierRef = useRef<number>(initialSpeed);
 
   useEffect(() => {
-    setSpeedMultiplier(initialSpeed);
     speedMultiplierRef.current = initialSpeed;
   }, [initialSpeed]);
   
@@ -2621,136 +2619,87 @@ export default function MarbleRace({
 
   return (
     <div className="w-full max-w-4xl flex flex-col items-center select-none relative">
-      {/* Map Theme, Length & Speed Selector Bar */}
-      <div className="w-full bg-slate-900/80 backdrop-blur-md px-4 py-2.5 rounded-2xl border border-slate-800/90 flex flex-wrap items-center justify-between gap-2.5 mb-3 shadow-xl z-20">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <div className="flex items-center gap-1.5 text-xs font-black text-slate-300 mr-1">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <span>맵:</span>
-          </div>
-          {MAP_THEMES.map(theme => (
-            <button
-              key={theme.id}
-              onClick={() => {
-                if (raceState === 'ready') {
-                  setMapTheme(theme.id);
-                  initTrack(theme.id, mapLengthRef.current);
-                  initMarbles();
-                }
-              }}
-              disabled={raceState !== 'ready'}
-              className={cn(
-                "px-2.5 py-1.5 rounded-xl text-xs font-black flex items-center gap-1 transition-all border shadow-sm",
-                mapTheme === theme.id
-                  ? theme.activeClasses
-                  : "bg-slate-800/80 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200",
-                raceState !== 'ready' && "opacity-50 cursor-not-allowed"
-              )}
-              title={theme.desc}
-            >
-              <span>{theme.icon}</span>
-              <span>{theme.name}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Map Length Selector (맵 길이: 짧게 / 중간 / 길게) */}
-        <div className="flex items-center gap-1 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800">
-          <Flag className="w-3.5 h-3.5 text-emerald-400" />
-          <span className="text-[11px] font-black text-slate-300 mr-0.5">길이</span>
-          {MAP_LENGTHS.map(len => (
-            <button
-              key={len.id}
-              type="button"
-              onClick={() => {
-                if (raceState === 'ready') {
-                  setMapLength(len.id);
-                  mapLengthRef.current = len.id;
-                  initTrack(mapTheme, len.id);
-                  initMarbles();
-                }
-              }}
-              disabled={raceState !== 'ready'}
-              className={cn(
-                "px-2 py-1 rounded-lg text-[11px] font-black transition-all flex items-center gap-1",
-                mapLength === len.id
-                  ? "bg-emerald-500 text-slate-950 shadow-md scale-105"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800",
-                raceState !== 'ready' && "opacity-50 cursor-not-allowed"
-              )}
-              title={len.desc}
-            >
-              <span>{len.icon}</span>
-              <span>{len.name}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* Real-time Speed Multiplier Control (배속 조절) */}
-        <div className="flex items-center gap-1.5 bg-slate-950/80 px-2.5 py-1 rounded-xl border border-slate-800">
-          <Zap className="w-3.5 h-3.5 text-amber-400" />
-          <span className="text-[11px] font-black text-slate-300 mr-0.5">배속</span>
-          {[0.5, 1, 1.5, 2, 3].map(spd => (
-            <button
-              key={spd}
-              type="button"
-              onClick={() => {
-                setSpeedMultiplier(spd);
-                speedMultiplierRef.current = spd;
-              }}
-              className={cn(
-                "px-2 py-1 rounded-lg text-[11px] font-black transition-all",
-                speedMultiplier === spd
-                  ? "bg-amber-400 text-slate-950 shadow-md scale-105"
-                  : "text-slate-400 hover:text-white hover:bg-slate-800"
-              )}
-              title={`구슬 레이스 ${spd}배속 설정`}
-            >
-              {spd}x
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Race Top HUD */}
-      <div className="w-full bg-slate-900/90 backdrop-blur-md p-4 rounded-3xl border border-slate-800 flex items-center justify-between gap-4 mb-4 shadow-2xl z-20">
-        {/* Left Title & Description (Fixed layout, no jitter) */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+      {/* Unified Compact Header & Setup Bar */}
+      <div className="w-full bg-slate-900/95 backdrop-blur-md p-3.5 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-3 mb-3 shadow-xl z-20">
+        <div className="flex items-center gap-3 min-w-0">
           <div className={cn(
-            "p-3 rounded-2xl border transition-colors flex-shrink-0",
-            winRule === 'last' 
-              ? "bg-purple-500/20 text-purple-400 border-purple-500/30" 
-              : "bg-amber-500/20 text-amber-400 border-amber-500/30"
+            "p-2.5 rounded-xl border shrink-0",
+            winRule === 'last'
+              ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
+              : "bg-amber-500/20 text-amber-300 border-amber-500/30"
           )}>
-            {winRule === 'last' ? <Hourglass className="w-6 h-6 animate-pulse" /> : <Trophy className="w-6 h-6" />}
+            {winRule === 'last' ? <Hourglass className="w-5 h-5" /> : <Trophy className="w-5 h-5" />}
           </div>
           <div className="min-w-0">
-            <h3 className="text-lg font-black text-white flex items-center gap-2 truncate">
-              구슬 레이스 추첨
-              <span className={cn(
-                "text-xs px-2.5 py-0.5 rounded-full border font-bold flex-shrink-0",
-                winRule === 'last'
-                  ? "bg-purple-500/20 text-purple-300 border-purple-500/30"
-                  : "bg-amber-500/20 text-amber-300 border-amber-500/30"
-              )}>
-                {winRule === 'last' ? "🐢 꼴찌 서바이벌" : "🏆 1등 선착순"}
-              </span>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 font-bold flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-base font-black text-white truncate">구슬 레이스</h3>
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold shrink-0">
                 목표 {numWinners}명
               </span>
-            </h3>
-            <p className="text-xs text-slate-400 truncate h-5 flex items-center">
-              {winRule === 'last' 
-                ? "먼저 들어오면 탈락! 끝까지 버텨 가장 늦게 들어온 최후의 구슬이 1등!" 
-                : "결승선에 가장 먼저 도착한 구슬이 당첨됩니다!"}
+            </div>
+            <p className="text-xs text-slate-400 truncate">
+              {winRule === 'last'
+                ? "끝까지 버텨 마지막에 도착한 구슬이 1등"
+                : "결승선에 가장 먼저 도착한 구슬이 당첨"}
             </p>
           </div>
         </div>
 
-        {/* Action Buttons (Fixed sizes, no jittering) */}
-        <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Win Rule Toggle (선착순 vs 꼴찌 서바이벌) - Fixed width 148px */}
+        <div className="flex flex-wrap items-center gap-2">
+          {raceState === 'ready' && (
+            <>
+              <div className="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800">
+                {MAP_THEMES.map(theme => (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => {
+                      setMapTheme(theme.id);
+                      initTrack(theme.id, mapLengthRef.current);
+                      initMarbles();
+                    }}
+                    title={theme.desc}
+                    className={cn(
+                      "px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer",
+                      mapTheme === theme.id
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    <span>{theme.icon}</span>
+                    <span className="hidden sm:inline">{theme.name}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center gap-1 bg-slate-950/70 p-1 rounded-xl border border-slate-800">
+                {MAP_LENGTHS.map(len => (
+                  <button
+                    key={len.id}
+                    type="button"
+                    onClick={() => {
+                      setMapLength(len.id);
+                      mapLengthRef.current = len.id;
+                      initTrack(mapTheme, len.id);
+                      initMarbles();
+                    }}
+                    title={len.desc}
+                    className={cn(
+                      "px-2 py-1 rounded-lg text-xs font-bold transition-colors cursor-pointer",
+                      mapLength === len.id
+                        ? "bg-emerald-500 text-slate-950"
+                        : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    {len.name}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
           <button
+            type="button"
             onClick={() => {
               if (raceState === 'ready') {
                 setWinRule(prev => prev === 'first' ? 'last' : 'first');
@@ -2758,77 +2707,56 @@ export default function MarbleRace({
             }}
             disabled={raceState !== 'ready'}
             className={cn(
-              "w-[148px] h-[40px] px-2 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all border shadow-sm flex-shrink-0",
+              "h-9 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors border",
               winRule === 'last'
-                ? "bg-purple-500/25 text-purple-300 border-purple-500/40 hover:bg-purple-500/35"
-                : "bg-amber-500/20 text-amber-300 border-amber-500/40 hover:bg-amber-500/30",
+                ? "bg-purple-500/20 text-purple-300 border-purple-500/40"
+                : "bg-amber-500/15 text-amber-300 border-amber-500/40",
               raceState !== 'ready' && "opacity-60 cursor-not-allowed"
             )}
-            title="클릭하여 당첨 방식을 선착순(1등) 또는 서바이벌(꼴찌 당첨)으로 변경합니다."
           >
-            {winRule === 'last' ? (
-              <>
-                <Hourglass className="w-3.5 h-3.5 text-purple-400 animate-spin flex-shrink-0" />
-                <span>🐢 꼴찌 서바이벌</span>
-              </>
-            ) : (
-              <>
-                <Trophy className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                <span>🏆 1등 선착순</span>
-              </>
-            )}
+            {winRule === 'last' ? <Hourglass className="w-3.5 h-3.5" /> : <Trophy className="w-3.5 h-3.5" />}
+            <span>{winRule === 'last' ? '꼴찌 서바이벌' : '1등 선착순'}</span>
           </button>
 
-          {/* Bomb Mode Toggle Button - Fixed width 108px */}
           <button
+            type="button"
             onClick={() => setBombMode(prev => !prev)}
             className={cn(
-              "w-[108px] h-[40px] px-2 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all border shadow-sm flex-shrink-0",
-              bombMode 
-                ? "bg-rose-500/20 text-rose-300 border-rose-500/40 hover:bg-rose-500/30" 
-                : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-slate-200"
+              "h-9 px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors border cursor-pointer",
+              bombMode
+                ? "bg-rose-500/20 text-rose-300 border-rose-500/40"
+                : "bg-slate-800 text-slate-400 border-slate-700 hover:text-slate-200"
             )}
-            title="레이스 도중 구슬들이 무작위로 폭발하며 충격파를 뿜어내는 모드입니다."
           >
-            <Bomb className={cn("w-3.5 h-3.5 flex-shrink-0", bombMode ? "text-rose-400 animate-pulse" : "text-slate-400")} />
-            <span>폭발 {bombMode ? "ON" : "OFF"}</span>
+            <Bomb className="w-3.5 h-3.5" />
+            <span>폭발 {bombMode ? 'ON' : 'OFF'}</span>
           </button>
 
-          {raceState === 'ready' && (
+          {raceState === 'ready' ? (
             <button
+              type="button"
               onClick={startCountdown}
               style={{ backgroundColor: primaryColor }}
-              className="h-[40px] px-5 py-2 rounded-xl font-black text-slate-950 text-xs sm:text-sm shadow-xl flex items-center justify-center gap-1.5 hover:scale-105 active:scale-95 transition-all flex-shrink-0"
+              className="h-9 px-4 rounded-xl font-black text-slate-950 text-xs sm:text-sm flex items-center gap-1.5 hover:brightness-105 transition-all cursor-pointer"
             >
-              <Play className="w-4 h-4 fill-current" />
-              <span>출발!</span>
+              <Play className="w-3.5 h-3.5 fill-current" />
+              <span>출발</span>
             </button>
-          )}
-
-          {(raceState === 'racing' || raceState === 'completed') && (
+          ) : (
             <button
+              type="button"
               onClick={resetRace}
-              className="h-[40px] px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all border border-slate-700 flex-shrink-0"
+              className="h-9 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors border border-slate-700 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span>다시 하기</span>
-            </button>
-          )}
-
-          {raceState === 'completed' && (
-            <button
-              onClick={handleConfirmFinish}
-              className="h-[40px] px-4 py-2 bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-slate-950 rounded-xl font-black text-xs flex items-center justify-center gap-1.5 transition-all shadow-md animate-pulse flex-shrink-0"
-            >
-              <Sparkles className="w-3.5 h-3.5 fill-current" />
-              <span>결과 확정 ({finishCountdown}s)</span>
             </button>
           )}
         </div>
       </div>
 
       {/* Main Track View Container */}
-      <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[560px] bg-slate-950 rounded-3xl overflow-hidden border-4 border-slate-800 shadow-2xl flex justify-center">
+      <div className="relative w-full aspect-[4/3] sm:aspect-[16/10] max-h-[560px] bg-slate-950 rounded-2xl overflow-hidden border-2 border-slate-800 shadow-2xl flex justify-center">
         {/* Bomb Alert Floating Notification */}
         {bombAlert && (
           <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-rose-600/90 backdrop-blur-md text-white px-5 py-2 rounded-2xl shadow-2xl font-black text-sm flex items-center gap-2 z-50 animate-bounce border border-rose-400">

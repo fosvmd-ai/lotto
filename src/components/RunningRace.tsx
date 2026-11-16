@@ -1586,26 +1586,26 @@ export default function RunningRace({
   }, [getFinishX, numWinners, onRaceFinished, onWinnerDetermined, countdownText]);
 
   return (
-    <div className="w-full max-w-[1440px] mx-auto flex flex-col rounded-3xl overflow-hidden shadow-2xl border-4 border-amber-400/80 bg-slate-900 select-none">
+    <div className="w-full max-w-[1440px] mx-auto flex flex-col rounded-2xl overflow-hidden shadow-2xl border border-slate-800 bg-slate-900 select-none">
       {/* Top HUD Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r from-sky-600 via-sky-500 to-indigo-600 text-white">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 bg-slate-900/95 border-b border-slate-800 text-white">
         <div className="flex items-center gap-2.5 flex-wrap">
-          <div className="bg-amber-400 text-slate-950 font-black px-3.5 py-1.5 rounded-xl shadow-sm flex items-center gap-1.5 text-sm">
-            <Trophy className="w-4 h-4" />
+          <div className="bg-amber-400 text-slate-950 font-black px-3 py-1 rounded-xl flex items-center gap-1.5 text-xs sm:text-sm">
+            <Trophy className="w-3.5 h-3.5" />
             <span>{raceMode === 'first' ? '1등' : '꼴등'} {leaderName}</span>
           </div>
 
           {slowMoReason !== 'none' && (
-            <div className={`text-white font-black px-3 py-1.5 rounded-xl text-xs animate-pulse flex items-center gap-1 shadow ${
-              slowMoReason === 'ufo' ? 'bg-emerald-600' : 'bg-rose-500'
+            <div className={`text-white font-bold px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 ${
+              slowMoReason === 'ufo' ? 'bg-emerald-600' : 'bg-rose-600'
             }`}>
               <Zap className="w-3.5 h-3.5" />
               <span>
                 {slowMoReason === 'ufo'
-                  ? 'UFO 납치! 확대 슬로우'
+                  ? 'UFO 납치 · 확대 슬로우'
                   : slowMoReason === 'lead'
-                    ? '선두 역전! 슬로우 모션'
-                    : '결승! 느린 화면'}
+                    ? `선두 역전! ${leaderName}`
+                    : '결승 슬로우 모션'}
               </span>
             </div>
           )}
@@ -1615,7 +1615,7 @@ export default function RunningRace({
               {winnersList.map((w, idx) => (
                 <span
                   key={`${w}-${idx}`}
-                  className="bg-white/20 backdrop-blur-sm border border-white/30 text-white text-xs font-bold px-2.5 py-1 rounded-lg"
+                  className="bg-slate-800 border border-slate-700 text-slate-100 text-xs font-bold px-2.5 py-1 rounded-lg"
                 >
                   {idx + 1}등 {w}
                 </span>
@@ -1624,52 +1624,11 @@ export default function RunningRace({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Mode & Length Controls (when ready) */}
-          {phase === 'ready' && (
-            <>
-              <div className="flex bg-black/20 p-1 rounded-xl text-xs font-bold">
-                <button
-                  type="button"
-                  onClick={() => setRaceMode('first')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    raceMode === 'first' ? 'bg-amber-400 text-slate-950' : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  1등 선발
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRaceMode('last')}
-                  className={`px-2.5 py-1 rounded-lg transition-all ${
-                    raceMode === 'last' ? 'bg-amber-400 text-slate-950' : 'text-white/80 hover:text-white'
-                  }`}
-                >
-                  꼴등 선발
-                </button>
-              </div>
-
-              <div className="flex bg-black/20 p-1 rounded-xl text-xs font-bold">
-                {TRACK_LENGTH_PRESETS.map(preset => (
-                  <button
-                    key={preset.value}
-                    type="button"
-                    onClick={() => setTrackLength(preset.value)}
-                    className={`px-2.5 py-1 rounded-lg transition-all ${
-                      trackLength === preset.value ? 'bg-white text-slate-900' : 'text-white/80 hover:text-white'
-                    }`}
-                  >
-                    {preset.label}
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
-
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
             onClick={() => setIsMuted(!isMuted)}
-            className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-all"
+            className="w-8 h-8 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg flex items-center justify-center transition-colors border border-slate-700"
             title={isMuted ? '소리 켜기' : '음소거'}
           >
             {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
@@ -1679,7 +1638,7 @@ export default function RunningRace({
             <button
               type="button"
               onClick={resetRace}
-              className="w-9 h-9 bg-white/20 hover:bg-white/30 rounded-xl flex items-center justify-center transition-all"
+              className="w-8 h-8 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg flex items-center justify-center transition-colors border border-slate-700"
               title="다시 준비"
             >
               <RotateCcw className="w-4 h-4" />
@@ -1697,20 +1656,42 @@ export default function RunningRace({
 
         {/* Ready Start Overlay */}
         {phase === 'ready' && (
-          <div className="absolute inset-0 bg-slate-950/35 backdrop-blur-[1px] flex flex-col items-center justify-center gap-4 p-4">
-            <div className="bg-white/95 text-slate-900 px-6 py-5 rounded-3xl shadow-2xl border-4 border-amber-400 text-center w-full max-w-md">
-              <p className="text-xs font-black text-amber-600 uppercase tracking-wider mb-1">
-                운동회 달리기 추첨 ({students.length}명 전원 한눈에 · {numWinners}명 선발)
-              </p>
-              <h3 className="text-xl font-black text-slate-900 mb-3">
-                {raceMode === 'first' ? '가장 먼저 결승선을 통과하라!' : '끝까지 느긋하게! 꼴등이 주인공!'}
-              </h3>
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] flex flex-col items-center justify-center gap-4 p-4">
+            <div className="bg-white text-slate-900 px-6 py-5 rounded-2xl shadow-2xl border border-slate-200 text-center w-full max-w-md space-y-4">
+              <div>
+                <p className="text-xs font-bold text-indigo-600 mb-0.5">
+                  {students.length}명 참가 · {numWinners}명 선발
+                </p>
+                <h3 className="text-lg font-black text-slate-900">운동회 달리기 설정</h3>
+              </div>
+
+              {/* Race Mode Segmented Control */}
+              <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200/80">
+                <button
+                  type="button"
+                  onClick={() => setRaceMode('first')}
+                  className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    raceMode === 'first' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🏆 1등 선착순
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRaceMode('last')}
+                  className={`py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    raceMode === 'last' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  🐢 꼴등 서바이벌
+                </button>
+              </div>
 
               {/* Track Length Slider & Presets */}
-              <div className="bg-slate-100 rounded-2xl p-3 mb-4 text-left border border-slate-200">
-                <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-2">
-                  <span>트랙 길이 조절</span>
-                  <span className="text-indigo-600">{Math.round(trackLength / 26)}m ({trackLength}px)</span>
+              <div className="bg-slate-50 rounded-xl p-3 text-left border border-slate-200/80">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
+                  <span>트랙 길이</span>
+                  <span className="text-indigo-600 font-black">{Math.round(trackLength / 26)}m ({trackLength}px)</span>
                 </div>
                 <input
                   type="range"
@@ -1719,18 +1700,18 @@ export default function RunningRace({
                   step={100}
                   value={trackLength}
                   onChange={(e) => setTrackLength(parseInt(e.target.value, 10))}
-                  className="w-full accent-[#d8432b] mb-2"
+                  className="w-full accent-indigo-600 mb-2 cursor-pointer"
                 />
-                <div className="grid grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-5 gap-1">
                   {TRACK_LENGTH_PRESETS.map(preset => (
                     <button
                       key={preset.value}
                       type="button"
                       onClick={() => setTrackLength(preset.value)}
-                      className={`py-1 rounded-lg text-[11px] font-bold border transition-all ${
+                      className={`py-1 rounded-lg text-[11px] font-bold border transition-colors cursor-pointer ${
                         trackLength === preset.value
-                          ? 'bg-amber-400 text-slate-950 border-amber-500'
-                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-indigo-600 text-white border-indigo-600'
+                          : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
                       {preset.label}
@@ -1740,23 +1721,23 @@ export default function RunningRace({
               </div>
 
               {/* Weather Effect Selector */}
-              <div className="bg-slate-100 rounded-2xl p-3 mb-4 text-left border border-slate-200">
-                <div className="flex items-center justify-between text-xs font-black text-slate-700 mb-2">
-                  <span>기후 효과 선택</span>
-                  <span className="text-sky-600">
+              <div className="bg-slate-50 rounded-xl p-3 text-left border border-slate-200/80">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-700 mb-2">
+                  <span>기후 효과</span>
+                  <span className="text-sky-600 font-black">
                     {WEATHER_PRESETS.find(w => w.id === weatherMode)?.icon} {WEATHER_PRESETS.find(w => w.id === weatherMode)?.label}
                   </span>
                 </div>
-                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1">
                   {WEATHER_PRESETS.map(w => (
                     <button
                       key={w.id}
                       type="button"
                       onClick={() => setWeatherMode(w.id)}
-                      className={`py-1.5 px-1 rounded-lg text-[11px] font-bold border transition-all flex flex-col items-center gap-0.5 cursor-pointer ${
+                      className={`py-1.5 px-1 rounded-lg text-[11px] font-bold border transition-colors flex flex-col items-center gap-0.5 cursor-pointer ${
                         weatherMode === w.id
-                          ? 'bg-sky-500 text-white border-sky-600 shadow-xs'
-                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                          ? 'bg-sky-600 text-white border-sky-600'
+                          : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
                       <span className="text-sm leading-none">{w.icon}</span>
@@ -1769,10 +1750,10 @@ export default function RunningRace({
               <button
                 type="button"
                 onClick={startCountdown}
-                className="w-full py-3.5 px-6 bg-[#d8432b] hover:bg-[#b9331d] text-white font-black text-lg rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="w-full py-3 px-6 bg-indigo-600 hover:bg-indigo-700 text-white font-black text-base rounded-xl transition-colors flex items-center justify-center gap-2 cursor-pointer"
               >
-                <Play className="w-5 h-5 fill-current" />
-                출발하기!
+                <Play className="w-4 h-4 fill-current" />
+                출발하기
               </button>
             </div>
           </div>
@@ -1781,20 +1762,8 @@ export default function RunningRace({
         {/* Countdown Overlay */}
         {phase === 'countdown' && countdownText && (
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="bg-amber-400 text-slate-950 font-black text-4xl sm:text-5xl px-8 py-4 rounded-3xl shadow-2xl border-4 border-white animate-bounce">
+            <div className="bg-amber-400 text-slate-950 font-black text-4xl sm:text-5xl px-8 py-4 rounded-2xl shadow-2xl border-2 border-white animate-bounce">
               {countdownText}
-            </div>
-          </div>
-        )}
-
-        {/* Clean Lead-Change / UFO Close-Up Pill */}
-        {phase === 'racing' && (slowMoReason === 'lead' || slowMoReason === 'ufo') && (
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 pointer-events-none">
-            <div className={`bg-slate-950/85 backdrop-blur-sm border font-black text-sm sm:text-base px-4 py-1.5 rounded-full shadow-lg flex items-center gap-2 ${
-              slowMoReason === 'ufo' ? 'text-emerald-300 border-emerald-400/70' : 'text-amber-300 border-amber-400/60'
-            }`}>
-              <span>{slowMoReason === 'ufo' ? '🛸' : '🔥'}</span>
-              <span>{slowMoReason === 'ufo' ? 'UFO 출현! 외계인 납치 중!' : `선두 역전! ${leaderName}`}</span>
             </div>
           </div>
         )}
@@ -1802,7 +1771,7 @@ export default function RunningRace({
         {/* Final Standings Popup */}
         {phase === 'finished' && finalStandings && (
           <div className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 z-30">
-            <div className="bg-white rounded-3xl shadow-2xl border-4 border-amber-400 overflow-hidden w-full max-w-md animate-in zoom-in-95 duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden w-full max-w-md animate-in zoom-in-95 duration-200">
               <div className="bg-amber-400 text-slate-950 px-6 py-4 text-center">
                 <p className="text-xs font-black uppercase tracking-wider opacity-80">
                   {raceMode === 'first' ? '선착순 선발' : '꼴등 선발'} · 최종 {finalStandings.length}명
