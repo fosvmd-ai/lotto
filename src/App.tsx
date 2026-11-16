@@ -152,6 +152,22 @@ interface GameState {
   };
 }
 
+type PickDrawEffect = 'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board';
+
+const PICK_DRAW_EFFECTS: {
+  id: PickDrawEffect;
+  name: string;
+  renderIcon: (cls?: string) => React.ReactNode;
+}[] = [
+  { id: 'board', name: '전광판', renderIcon: (cls) => <LayoutDashboard className={cn("w-4 h-4 text-emerald-500", cls)} /> },
+  { id: 'standard', name: '네온 코어', renderIcon: (cls) => <Atom className={cn("w-4 h-4 text-indigo-500", cls)} /> },
+  { id: 'slot', name: '베가스 슬롯', renderIcon: (cls) => <Coins className={cn("w-4 h-4 text-yellow-500", cls)} /> },
+  { id: 'explosion', name: '초신성 폭발', renderIcon: (cls) => <Flame className={cn("w-4 h-4 text-rose-500", cls)} /> },
+  { id: 'card', name: '타로 카드', renderIcon: (cls) => <Crown className={cn("w-4 h-4 text-purple-500", cls)} /> },
+  { id: 'box', name: '보물상자', renderIcon: (cls) => <Trophy className={cn("w-4 h-4 text-amber-600", cls)} /> },
+  { id: 'machine', name: '에어로 볼', renderIcon: (cls) => <Wind className={cn("w-4 h-4 text-cyan-500", cls)} /> },
+];
+
 // --- Utils ---
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -774,6 +790,11 @@ function TeacherView({ students, entries, gameState, admins, user }: {
   const [showQr, setShowQr] = useState(false);
   const [numWinners, setNumWinners] = useState(gameState?.numWinners || 5);
   const [drawEffect, setDrawEffect] = useState<'standard' | 'slot' | 'explosion' | 'card' | 'box' | 'machine' | 'board' | 'marble' | 'running'>(gameState?.drawEffect || 'board');
+  const lastPickEffectRef = useRef<PickDrawEffect>(
+    gameState?.drawEffect && gameState.drawEffect !== 'marble' && gameState.drawEffect !== 'running'
+      ? gameState.drawEffect
+      : 'board'
+  );
   const [marbleMapTheme, setMarbleMapTheme] = useState<MapTheme>(gameState?.marbleMapTheme || 'cosmic');
   const [marbleMapLength, setMarbleMapLength] = useState<MapLength>(gameState?.marbleMapLength || 'medium');
   const [drawSpeed, setDrawSpeed] = useState<number>(gameState?.drawSpeed || 1);
@@ -1270,7 +1291,7 @@ function TeacherView({ students, entries, gameState, admins, user }: {
           />
         </div>
 
-        {/* Draw Effect Selection */}
+        {/* Draw Mode Selection (3 Clean Categories) */}
         <div className="md:col-span-2 pt-3 border-t border-slate-200/70">
           <div className="flex items-center justify-between mb-2.5">
             <label className="text-xs font-bold text-slate-600">추첨 방식</label>
@@ -1278,51 +1299,110 @@ function TeacherView({ students, entries, gameState, admins, user }: {
               <Volume2 className="w-3 h-3" /> 선택 시 효과음 미리듣기
             </span>
           </div>
-          <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-1.5">
+          <div className="grid grid-cols-3 gap-2">
             {[
-              { id: 'standard', name: '네온 코어', icon: <Atom className="w-4 h-4 text-indigo-500" /> },
-              { id: 'marble', name: '구슬 레이스', icon: <CircleDot className="w-4 h-4 text-amber-500" /> },
-              { id: 'running', name: '달리기 레이스', icon: <Flag className="w-4 h-4 text-orange-500" /> },
-              { id: 'slot', name: '베가스 슬롯', icon: <Coins className="w-4 h-4 text-yellow-500" /> },
-              { id: 'explosion', name: '초신성 폭발', icon: <Flame className="w-4 h-4 text-rose-500" /> },
-              { id: 'card', name: '타로 카드', icon: <Crown className="w-4 h-4 text-purple-500" /> },
-              { id: 'box', name: '보물상자', icon: <Trophy className="w-4 h-4 text-amber-600" /> },
-              { id: 'machine', name: '에어로 볼', icon: <Wind className="w-4 h-4 text-cyan-500" /> },
-              { id: 'board', name: '전광판', icon: <LayoutDashboard className="w-4 h-4 text-emerald-500" /> }
-            ].map((eff) => {
-              const isActive = drawEffect === eff.id;
-              return (
-                <button
-                  key={eff.id}
-                  type="button"
-                  onClick={() => {
-                    const nextEffect = eff.id as GameState['drawEffect'];
-                    setDrawEffect(nextEffect);
-                    saveQuickDrawConfig({ drawEffect: nextEffect });
-                    soundEngine.unlockAudio().then(() => {
-                      soundEngine.playWin(eff.id);
-                    });
-                  }}
-                  className={cn(
-                    "p-2 rounded-xl border transition-all text-center flex flex-col items-center gap-1.5 cursor-pointer",
-                    isActive
-                      ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"
-                      : "bg-white border-slate-200/80 text-slate-600 hover:border-indigo-300 hover:bg-indigo-50/40"
-                  )}
-                >
+              {
+                id: 'marble',
+                name: '구슬 레이스',
+                desc: '물리 장애물 트랙',
+                active: drawEffect === 'marble',
+                icon: <CircleDot className="w-5 h-5 text-amber-500" />,
+                onClick: () => {
+                  setDrawEffect('marble');
+                  saveQuickDrawConfig({ drawEffect: 'marble' });
+                  soundEngine.unlockAudio().then(() => soundEngine.playWin('marble'));
+                }
+              },
+              {
+                id: 'running',
+                name: '달리기 레이스',
+                desc: '운동회 역전 경주',
+                active: drawEffect === 'running',
+                icon: <Flag className="w-5 h-5 text-orange-500" />,
+                onClick: () => {
+                  setDrawEffect('running');
+                  saveQuickDrawConfig({ drawEffect: 'running' });
+                  soundEngine.unlockAudio().then(() => soundEngine.playWin('running'));
+                }
+              },
+              {
+                id: 'pick',
+                name: '뽑기',
+                desc: '7가지 연출 효과',
+                active: drawEffect !== 'marble' && drawEffect !== 'running',
+                icon: <Sparkles className="w-5 h-5 text-indigo-500" />,
+                onClick: () => {
+                  const target = lastPickEffectRef.current || 'board';
+                  setDrawEffect(target);
+                  saveQuickDrawConfig({ drawEffect: target });
+                  soundEngine.unlockAudio().then(() => soundEngine.playWin(target));
+                }
+              }
+            ].map((mode) => (
+              <button
+                key={mode.id}
+                type="button"
+                onClick={mode.onClick}
+                className={cn(
+                  "p-3 rounded-xl border transition-all flex items-center gap-3 text-left cursor-pointer",
+                  mode.active
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"
+                    : "bg-white border-slate-200/80 text-slate-700 hover:border-indigo-300 hover:bg-indigo-50/40"
+                )}
+              >
+                <div className={cn(
+                  "w-9 h-9 rounded-xl flex items-center justify-center shrink-0",
+                  mode.active ? "bg-white/20 text-white" : "bg-slate-50"
+                )}>
+                  {mode.icon}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs sm:text-sm font-black truncate">{mode.name}</div>
                   <div className={cn(
-                    "w-7 h-7 rounded-lg flex items-center justify-center",
-                    isActive ? "bg-white/20 text-white" : "bg-slate-50"
+                    "text-[11px] truncate",
+                    mode.active ? "text-indigo-100" : "text-slate-400"
                   )}>
-                    {eff.icon}
+                    {mode.desc}
                   </div>
-                  <span className="text-[11px] font-bold whitespace-nowrap">{eff.name}</span>
-                </button>
-              );
-            })}
+                </div>
+              </button>
+            ))}
           </div>
         </div>
       </div>
+
+      {/* Slim Inline Pick Effect Sub-bar */}
+      {drawEffect !== 'marble' && drawEffect !== 'running' && (
+        <div className="p-3.5 sm:p-4 bg-indigo-50/60 rounded-2xl border border-indigo-200/70 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-bold text-indigo-900 mr-1">뽑기 효과:</span>
+          {PICK_DRAW_EFFECTS.map((eff) => {
+            const isSelected = drawEffect === eff.id;
+            return (
+              <button
+                key={eff.id}
+                type="button"
+                onClick={() => {
+                  lastPickEffectRef.current = eff.id;
+                  setDrawEffect(eff.id);
+                  saveQuickDrawConfig({ drawEffect: eff.id });
+                  soundEngine.unlockAudio().then(() => {
+                    soundEngine.playWin(eff.id);
+                  });
+                }}
+                className={cn(
+                  "px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer",
+                  isSelected
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                    : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300"
+                )}
+              >
+                {eff.renderIcon(isSelected ? "text-white" : undefined)}
+                <span>{eff.name}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Slim Inline Marble Race Map & Length Bar */}
       {drawEffect === 'marble' && (
@@ -3132,6 +3212,37 @@ function DrawingAnimation({ students, entries, gameState, isAdmin, adminEmail }:
           "mx-auto w-full flex flex-col items-center",
           effect === 'running' ? "max-w-[1440px]" : "max-w-4xl"
         )}>
+          {/* Pick Effect Switcher Strip inside Drawing View */}
+          {effect !== 'marble' && effect !== 'running' && isAdmin && !isAnimating && (
+            <div className="mb-5 flex flex-wrap items-center justify-center gap-1.5 bg-slate-900/75 px-3 py-2 rounded-2xl border border-slate-800">
+              <span className="text-[11px] font-bold text-slate-400 mr-1">뽑기 효과:</span>
+              {PICK_DRAW_EFFECTS.map(eff => {
+                const isSelected = effect === eff.id;
+                return (
+                  <button
+                    key={eff.id}
+                    type="button"
+                    onClick={() => {
+                      setDoc(doc(db, 'gameState', adminEmail), {
+                        ...gameState,
+                        drawEffect: eff.id
+                      }, { merge: true });
+                      soundEngine.unlockAudio().then(() => soundEngine.playWin(eff.id));
+                    }}
+                    className={cn(
+                      "px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer",
+                      isSelected
+                        ? "bg-indigo-600 text-white"
+                        : "text-slate-300 hover:text-white hover:bg-slate-800"
+                    )}
+                  >
+                    {eff.renderIcon(isSelected ? "text-white w-3.5 h-3.5" : "w-3.5 h-3.5")}
+                    <span>{eff.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
 
           {(() => {
             const handleRaceWinnerDetermined = (winnerName: string) => {
